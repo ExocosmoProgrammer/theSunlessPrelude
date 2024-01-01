@@ -52,7 +52,7 @@ def getListOfThingsWithCommas(conjunction, messages, ending='', beginning=''):
 
     messages[-2] += f'{conjunction} '
 
-    finalList = beginning + ' '
+    finalList = beginning
 
     for i in messages:
         finalList += i

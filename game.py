@@ -1,7 +1,7 @@
 import random
 
 from variables import foesPerLevel, bossesPerLevel, oneTimeUseItems
-from definitions import printWithPause, percentChance, greater
+from definitions import printWithPause, percentChance, greater, saveWithPickle
 from player import player
 from foe import foe
 
@@ -12,8 +12,6 @@ pro = player()
 foes = [foe('alien soldier', 1)]
 printWithPause('Day 12', 3)
 levelFourSpawnCooldown = 0
-enemiesKilledInLevelFour = 0
-sunPriestSpawned = 0
 playerClass = None
 canonCooldown = 3
 
@@ -35,6 +33,9 @@ if playerClass == 'police':
 
 elif playerClass == 'soldier':
     pro.maxHp = 100
+    pro.inventory = ['knife', 'shield', 'cross', 'nunchucks', 'sacrificial dagger', 'radio', 'hissing cockroach',
+                     'gas canister', 'vial of diseased blood', 'stun grenade', 'baton', 'gun', 'regen',
+                     'butterfly knife']
     pro.inventory = ['knife', 'shield']
     pro.updateStats()
 
@@ -82,25 +83,53 @@ def addBoss():
 
 
 def removeFoes():
-    global foes, number, enemiesKilledInLevelFour
+    global foes, number
 
     for enemy in foes:
         if enemy.hp <= 0:
             foes.remove(enemy)
-            printWithPause(f'{enemy.getPrintName()} is dead.')
+            getRidOfFoe = 1
 
-            if level == 4:
-                enemiesKilledInLevelFour += 1
+            if 'cross' in pro.inventory and not enemy.possessed and enemy.type not in ['alien commander',
+                                                                                       'alien pilot', 'alien warrior',
+                                                                                       'sun priest']:
+                if len(pro.souls) < 2:
+                    if input(f"Will you take {enemy.getPrintName()}'s soul? y/n:") == 'y':
+                        enemy.hp = enemy.initialHp / 2
+                        enemy.attack /= 2
+                        enemy.possessed = 1
+                        enemy.controlledByPro = 1
+                        pro.souls.append(enemy)
+                        enemy.scanned = 1
+                        printWithPause(f"You gained {enemy.getPrintName()}'s soul, costing you {enemy.hp} hp.")
+                        pro.hp -= enemy.hp
+                        enemy.bleedingDamage = 0
+                        enemy.poisonDamage = 0
+                        enemy.stun = 0
+                        getRidOfFoe = 0
 
-            for key in enemy.loot.keys():
-                if percentChance(enemy.loot[key]) and (key not in oneTimeUseItems or
-                                                       pro.inventory.count(key) < 3):
-                    pro.inventory.append(key)
-                    printWithPause(f'You got {key}.', 1)
+                    else:
+                        printWithPause(f'{enemy.getPrintName()} is dead.')
+                        printWithPause(f"You left behind {enemy.getPrintName()}'s soul.")
 
-            if enemy.givesPotions and percentChance(25):
-                pro.potions += 1
-                printWithPause('You acquired a potion.')
+                else:
+                    printWithPause("You cannot hold another soul.")
+
+            if getRidOfFoe:
+                printWithPause(f'{enemy.getPrintName()} is dead.')
+
+                if level == 4:
+                    pro.enemiesKilledInLevelFour += 1
+
+                for key in enemy.loot.keys():
+                    if percentChance(enemy.loot[key]) and (key not in oneTimeUseItems or
+                                                           pro.inventory.count(key) < 3):
+                        pro.inventory.append(key)
+                        printWithPause(f'You got {key}.', 1)
+
+                if enemy.givesPotions and percentChance(25):
+                    pro.potions += 1
+                    printWithPause('You acquired a potion.')
 
             if enemy.type == 'alien commander':
                 foes = []
@@ -126,7 +155,7 @@ def removeFoes():
                 pro.potions += 5
                 number = 1
                 printWithPause('You got 5 potions.')
-                printWithPause("Before you could finish killing the pilot, he disabled "
+                printWithPause("Before you can finish killing the pilot, he disables "
                                "the ship's controls and alerts other pilots that "
                                "the ship is being taken over.", 6)
                 printWithPause('The pilot is dead now.', 4)
@@ -162,7 +191,7 @@ def removeFoes():
 
                 printWithPause('You killed the sun priest.', 5)
                 printWithPause("You are victorious.", 5)
-                printWithPause("You sit back and wait to die.", 5)
+                printWithPause("You sit back and wait to die, glad to have saved your planet.", 5)
                 printWithPause("Once you killed the priest, Earth's sun "
                                "disappeared.", 5)
                 printWithPause("...", 5)
@@ -211,7 +240,7 @@ def addSummons():
 
 
 def handleLevelFourSpawning():
-    if level == 4 and not sunPriestSpawned:
+    if level == 4 and not pro.sunPriestSpawned:
         global levelFourSpawnCooldown, number
 
         if levelFourSpawnCooldown <= 0:
@@ -225,24 +254,32 @@ def handleLevelFourSpawning():
 
 
 def handleLevelFourBossSpawn():
-    global sunPriestSpawned, foes, number
+    global foes, number
+    pro.sunPriestSpawned = 1
+    foes = [foe('sun priest', number, scanned=1)]
+    printWithPause("You escaped the mob attacking you and fled to the cathedral.", 5)
+    printWithPause("Inside the cathedral, you found the priest controlling Earth's sun.", 5)
+    printWithPause('Kill the priest.', 5)
+    number += 1
 
-    if enemiesKilledInLevelFour >= 15 and not sunPriestSpawned:
-        sunPriestSpawned = 1
-        foes = [foe('sun priest', number, scanned=1)]
-        printWithPause("You escaped the mob attacking you and found the priest controlling "
-                       "Earth's sun.", 5)
-        printWithPause('Kill the priest.')
-        number += 1
+
+def saveGame():
+    saveWithPickle(pro, f'playerSave{file}.py')
+    variousData = {}
 
 
 while pro.hp > 0:
     removeFoes()
     printWithPause(f'{level}-{room}')
+    progress = pro.performNecessaryFunctions(foes, level)
+    foes += pro.newFoes
+    pro.newFoes = []
 
-    if pro.performNecessaryFunctions(foes, level):
+    if progress:
+        if level == 4:
+            handleLevelFourBossSpawn()
 
-        if room < 4:
+        elif room < 4:
             addFoes()
 
         elif room == 4:
@@ -269,16 +306,16 @@ while pro.hp > 0:
             if not enemy.possessed:
 
                 if possessedFoes and percentChance(50):
-                    enemy.actAsFoe(random.choice(possessedFoes), number, foes)
+                    enemy.actAsFoe(random.choice(possessedFoes), number, foes, pro)
 
                 else:
-                    enemy.actAsFoe(pro, number, foes)
+                    enemy.actAsFoe(pro, number, foes, pro)
                     addSummons()
 
             else:
                 try:
                     otherFoes = [enemy for enemy in foes if not enemy.possessed]
-                    enemy.actAsFoe(random.choice(otherFoes), number, foes)
+                    enemy.actAsFoe(random.choice(otherFoes), number, foes, pro)
 
                 except IndexError:
                     pass
@@ -287,7 +324,6 @@ while pro.hp > 0:
         handleCanon()
         removeFoes()
         handleLevelFourSpawning()
-        handleLevelFourBossSpawn()
 
 if level == 1:
     printWithPause('You died. The alien troops will destroy the world.', 5)

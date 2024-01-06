@@ -1,5 +1,6 @@
 import time
 import random
+import pickle
 
 
 def lesser(a, b):
@@ -28,22 +29,26 @@ def getReducedDamage(damage, target):
 
 
 def getTarget(enemies, response, fromAlly=True):
-    if response == 'r':
-        if fromAlly:
-            priorityFoes = [enemy for enemy in enemies if not enemy.possessed]
+    try:
+        if response == 'r':
+            if fromAlly:
+                priorityFoes = [enemy for enemy in enemies if not enemy.possessed]
 
-        else:
-            priorityFoes = [enemy for enemy in enemies if enemy.possessed]
+            else:
+                priorityFoes = [enemy for enemy in enemies if enemy.possessed]
 
-        if priorityFoes:
-            response = random.choice(priorityFoes).number
+            if priorityFoes:
+                response = random.choice(priorityFoes).number
 
-        else:
-            response = random.choice(enemies).number
+            else:
+                response = random.choice(enemies).number
 
-    for enemy in enemies:
-        if str(enemy.number) == str(response):
-            return enemy
+        for enemy in enemies:
+            if str(enemy.number) == str(response):
+                return enemy
+
+    except IndexError:
+        pass
 
 
 def getListOfThingsWithCommas(conjunction, messages, ending='', beginning=''):
@@ -60,3 +65,13 @@ def getListOfThingsWithCommas(conjunction, messages, ending='', beginning=''):
     finalList += ending
 
     return finalList
+
+
+def saveWithPickle(data, file):
+    try:
+        with open(file, 'x') as saveData:
+            pickle.dump(data, saveData)
+
+    except FileExistsError:
+        with open(file, 'w') as saveData:
+            pickle.dump(data, saveData)

@@ -7,12 +7,12 @@ from foe import foe
 
 number = 2
 room = 1
-level = 1
+level = 4
 pro = player()
 foes = [foe('alien soldier', 1)]
 printWithPause('Day 12', 3)
 levelFourSpawnCooldown = 0
-enemiesKilledInLevelFour = 0
+enemiesKilledInLevelFour = 15
 sunPriestSpawned = 0
 playerClass = None
 canonCooldown = 3
@@ -35,7 +35,7 @@ if playerClass == 'police':
 
 elif playerClass == 'soldier':
     pro.maxHp = 100
-    pro.inventory = ['knife', 'shield']
+    pro.inventory = ['knife', 'shield', 'sword', 'armor', 'nunchucks', 'cross']
     pro.updateStats()
 
 elif playerClass == 'citizen':

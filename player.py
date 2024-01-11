@@ -13,11 +13,13 @@ class player:
         self.inventory = []
         self.foe = 0
         self.attack = 10
-        self.potions = 3
+        self.potions = 25
         self.blocking = 0
         self.damageReduction = 0
         self.stun = 0
         self.souls = []
+        self.hasReachedLevelTwo = 0
+        self.hasReachedLevelFour = 0
 
     def showHp(self):
         hpDashCount = int(self.hp / 10)
@@ -228,7 +230,7 @@ class player:
             printWithPause('You do not have a stun grenade.')
 
     def useVialOfPoison(self, enemies):
-        if 'throwing knife' in self.inventory:
+        if 'vial of poison ' in self.inventory:
             targetId = input('Enter the id number of the foe you want to throw your vial '
                              "at or 'r' to target a random foe:")
             enemy = getTarget(enemies, targetId)
@@ -236,7 +238,7 @@ class player:
             try:
                 printWithPause(f'You hit {enemy.getPrintName()} with your vial, poisoning them.')
                 enemy.poisonDamage = 15
-                self.inventory.remove('throwing knife')
+                self.inventory.remove('vial of poison')
 
             except AttributeError:
                 pass

@@ -1,5 +1,6 @@
 import time
 import random
+import pickle
 
 
 def lesser(a, b):
@@ -60,3 +61,13 @@ def getListOfThingsWithCommas(conjunction, messages, ending='', beginning=''):
     finalList += ending
 
     return finalList
+
+
+def save(file, data):
+    try:
+        with open(f'save{file}.pickle', 'x') as saveFile:
+            pickle.dump(data, file)
+
+    except FileExistsError:
+        with open(f'save{file}.pickle', 'w') as saveFile:
+            pickle.dump(data, file)

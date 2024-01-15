@@ -367,6 +367,52 @@ class foe:
         self.basicAttack(target, number, enemies)
         self.handleRecentSummonQty()
 
+    def actAsAlienCommander(self, target, number, enemies):
+        if not self.stun:
+            if self.recentSummonQty < 7:
+                if self.hp <= 67 and percentChance(33):
+                    self.newFoes.append(foe('alien attacker', number))
+                    number += 1
+                    printWithPause(f'{self.getPrintName()} summoned alien attacker {number - 1} '
+                                   f'to attack you.')
+                    self.recentSummonQty += 1
+
+                if percentChance(33):
+                    self.newFoes.append(foe('drone', number))
+                    printWithPause(f'{self.getPrintName()} summoned drone {number} '
+                                   f'to attack you.')
+                    number += 1
+                    self.recentSummonQty += 1
+
+        if self.hp <= 133 and self.timesSummoned == 0:
+            self.newFoes.append(foe('alien protector', number))
+            number += 1
+            printWithPause(f'{self.getPrintName()} summoned alien protector {number - 1} '
+                           f'to protect the commander.')
+            self.timesSummoned = 1
+
+        if self.hp <= 67 and self.timesSummoned < 2:
+            self.newFoes.append(foe('alien protector', number))
+            number += 1
+            self.newFoes.append(foe('idol', number))
+            number += 1
+            printWithPause(f'{self.getPrintName()} summoned alien protector {number - 2} '
+                           f'to protect the commander.')
+            printWithPause(f'{self.getPrintName()} summoned idol {number - 1} '
+                           f'to attack you.')
+            self.timesSummoned = 2
+
+        if [enemy for enemy in enemies if enemy.type == 'alien protector']:
+            printWithPause(f'{self.getPrintName()} is immune to damage.')
+
+            if self.bleedingDamage:
+                printWithPause(f"{self.getPrintName()}'s bleeding has stopped.")
+                self.bleedingDamage = 0
+
+        self.basicAttack(target, number, enemies)
+        self.handleRecentSummonQty()
+
+
     def actAsAlienPilot(self, target, number, enemies):
         if not self.stun:
             if ((self.hp > 125 and percentChance(25)) or (self.hp <= 125 and percentChance(50))

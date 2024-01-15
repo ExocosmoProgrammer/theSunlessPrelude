@@ -229,17 +229,33 @@ class foe:
         if self.scaredOfCockroach > 0:
             self.scaredOfCockroach -= 0.5
 
-    def getHurtByDebuffs(self):
+    def getHurtByDebuffs(self, player):
+        if self.stun and not self.poisonDamage and 'gas canister' in player.inventory:
+            self.poisonDamage = 3
+            printWithPause(f'{self.getPrintName()} is poisoned from your gas canister.')
+
         if self.bleedingDamage:
             self.hp -= self.bleedingDamage
             printWithPause(f'{self.getPrintName()} took {self.bleedingDamage} damage '
                            f'from bleeding.')
-            
+
+            if 'vial of diseased blood' in player.inventory:
+                self.hp -= 3
+                printWithPause(f'{self.getPrintName()} took 3 damage from the disease in their blood.')
+
         if self.poisonDamage:
             self.hp -= self.poisonDamage
             printWithPause(f'{self.getPrintName()} took {self.poisonDamage} damage '
                            f'from poison.')
-            
+
+        if self.controlledByPro:
+            self.hp -= 5
+            printWithPause(f'{self.getPrintName()} lost 5 hp.')
+
+        if self.burnDamage:
+            self.hp -= self.burnDamage
+            printWithPause(f'{self.getPrintName()} took {self.burnDamage} from burning.')
+        
     def actAsIdol(self, target, number, enemies):
         target.hp -= 5
         self.gunWeakness = 0

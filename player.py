@@ -13,7 +13,7 @@ class player:
         self.inventory = []
         self.foe = 0
         self.attack = 10
-        self.potions = 25
+        self.potions = 3
         self.blocking = 0
         self.damageReduction = 0
         self.stun = 0
@@ -25,8 +25,8 @@ class player:
         self.standardAttack = 10
         self.temporaryAttack = 0
         self.temporaryAttackDuration = 0
-        self.hasReachedLevelFour = 1
-        self.hasReachedLevelTwo = 1
+        self.hasReachedLevelFour = 0
+        self.hasReachedLevelTwo = 0
 
         for key in extra.keys():
             exec(f'self.{key} = extra[key]')
@@ -90,20 +90,28 @@ class player:
                         printWithPause(f'You hit {enemy.getPrintName()} with a critical '
                                        f'attack, inflicting {damageInflicted} damage.')
 
-                        if self.inventory.count('baton'):
-                            enemy.stun = self.inventory.count('baton')
-                            printWithPause(f'You hit {enemy.getPrintName()} with your baton, '
-                                           f'stunning them for {enemy.stun} turns.')
-
                     enemy.hp -= damageInflicted
 
-                    if enemy.gunWeakness:
-                        damageInflicted = getReducedDamage(20, enemy)
+                    if 'baton' in self.inventory:
+                        enemy.beHitByBaton()
 
-                        for i in range(self.inventory.count('gun')):
-                            printWithPause(f'You shot {enemy.getPrintName()}, '
-                                           f'inflicting {damageInflicted} damage.')
-                            enemy.hp -= damageInflicted
+                    if enemy.gunWeakness and 'gun' in self.inventory:
+                        if enemy.type == 'alien commander' and [protector for protector in
+                                                                enemies if protector.type
+                                                                == 'alien protector']:
+                            printWithPause(f'You shot {enemy.getPrintName()}, but they were '
+                                           f'immune.')
+
+                        else:
+                            damageInflicted = getReducedDamage(self.attack / 2, enemy)
+
+                            for i in range(self.inventory.count('gun')):
+                                printWithPause(f'You shot {enemy.getPrintName()}, '
+                                               f'inflicting {damageInflicted} damage.')
+                                enemy.hp -= damageInflicted
+
+                            enemy.bleedingDamageFromGun = 3
+                            enemy.turnsOfBleedingFromGun = 3
 
             except AttributeError:
                 pass
@@ -450,7 +458,10 @@ class player:
             exec(input('What will you do:'))
 
         except Exception as error:
-            print(f'Your command raised an error saying, "{error}."')
+            printWithPause(f'Your command raised an error saying, "{error}."')
+
+        if input('Would you like to exit the terminal for custom inputs? y/n:') != 'y':
+            self.getCustomInput()
 
     def actions(self, enemies, level):
         self.blocking = 0
@@ -521,7 +532,7 @@ class player:
                                     and level < 4 or self.enemiesKilledInLevelFour >= 15):
                 return 1
 
-            elif action == 'custom':
+            elif action == 'other':
                 self.getCustomInput()
 
             for i in range(self.inventory.count('knife')):

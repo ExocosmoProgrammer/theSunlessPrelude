@@ -195,6 +195,7 @@ def removeFoes():
                 printWithPause("Cause chaos.", 5)
                 printWithPause('Continued in chapter IV...', 5)
                 pro.hasReachedLevelFour = 1
+                foes = []
 
             elif enemy.type == 'sun priest':
                 while input('Will you proceed? y/n:') != 'y':
@@ -337,13 +338,16 @@ def handleDeath():
             number = 2
             foes = [foe('alien soldier', 1)]
             room = 1
+            pro.potions = 3
 
         elif action == '2' and pro.hasReachedLevelTwo:
             level = 2
+            pro.potions = 5
 
         elif action == '4' and pro.hasReachedLevelFour:
             level = 4
             room = 1
+            pro.potions = 25
 
         else:
             proceed = False
@@ -354,8 +358,6 @@ def handleDeath():
 def getLootForRetry(initialLevel):
     if initialLevel > 1:
         for i in range(1, initialLevel):
-            print(initialLevel, 'innit')
-            print(i, 'i')
             foesForLoot = [foe(random.choice(foesPerLevel[i]), 1) for j in range(8)]
 
             for enemy in foesForLoot:

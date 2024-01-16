@@ -1,7 +1,7 @@
 import random
 
 from variables import bossesPerLevel
-from definitions import printWithPause, getReducedDamage, greater, percentChance
+from definitions import printWithPause, getReducedDamage, greater, percentChance, getTarget
 
 hpPerFoe = {'alien colonist': 10, 'alien bodyguard': 20, 'alien police': 30,
             'alien soldier': 40, 'alien secret service': 50, 'alien commander': 200,
@@ -33,12 +33,14 @@ lootPerFoe = {'alien colonist': {'regen': 15}, 'alien bodyguard': {'shield': 15}
 
 
 class foe:
-    def __init__(self, name, number, scanned=0, givesPotions=1, possessed=0, loot=None):
+    def __init__(self, name, number, scanned=0, givesPotions=1, possessed=0, loot=None,
+                 controlledByPro=0):
         self.type = name
         self.number = number
         self.scanned = scanned
         self.fullName = f'{name} {number}'
         self.hp = hpPerFoe[name]
+        self.hp = 1000
         self.attack = attackPerFoe[name]
         self.gunWeakness = 1
         self.givesPotions = givesPotions
@@ -47,6 +49,8 @@ class foe:
         self.stun = 0
         self.foe = 1
         self.nunchuckDebuff = 0
+        self.scaredOfCockroach = 0
+        self.burnDamage = 0
         foeAttackMethods = {'alien commander': self.actAsAlienCommander,
                             'idol': self.actAsIdol,
                             'alien protector': self.actAsAlienProtector,
@@ -72,6 +76,10 @@ class foe:
         self.lastPtAttackMethodUsed = 1
         self.recentSummonQty = 0
         self.durationUntilRecentSummonQtyReset = 0
+        self.controlledByPro = controlledByPro
+        self.hitsUntilStunnedByBaton = 1
+        self.turnsOfBleedingFromGun = 0
+        self.bleedingDamageFromGun = 0
 
         try:
             self.attackMethod = foeAttackMethods[name]
@@ -97,7 +105,7 @@ class foe:
 
     def basicAttack(self, target, number, enemies):
         if self.controlledByPro and [enemy for enemy in enemies if not enemy.possessed and
-                                     enemy.hp > 0] and self.stun <= 0:
+                                                                   enemy.hp > 0] and self.stun <= 0:
             targetId = input(f"Enter the id number of the foe you want {self.getPrintName()} to attack or "
                              "'r' to attack a random foe:")
             target = getTarget(enemies, targetId)
@@ -243,6 +251,20 @@ class foe:
                 self.hp -= 3
                 printWithPause(f'{self.getPrintName()} took 3 damage from the disease in their blood.')
 
+        if self.bleedingDamageFromGun:
+            self.hp -= self.bleedingDamageFromGun
+            printWithPause(f'{self.getPrintName()} took {self.bleedingDamageFromGun} damage '
+                           f'from bleeding from their gunshot wound.')
+
+            if 'vial of diseased blood' in player.inventory and not self.bleedingDamage:
+                self.hp -= 3
+                printWithPause(f'{self.getPrintName()} took 3 damage from the disease in their blood.')
+
+            self.turnsOfBleedingFromGun -= 1
+
+            if self.turnsOfBleedingFromGun <= 0:
+                self.bleedingDamageFromGun = 0
+
         if self.poisonDamage:
             self.hp -= self.poisonDamage
             printWithPause(f'{self.getPrintName()} took {self.poisonDamage} damage '
@@ -255,7 +277,7 @@ class foe:
         if self.burnDamage:
             self.hp -= self.burnDamage
             printWithPause(f'{self.getPrintName()} took {self.burnDamage} from burning.')
-        
+
     def actAsIdol(self, target, number, enemies):
         target.hp -= 5
         self.gunWeakness = 0
@@ -284,7 +306,7 @@ class foe:
 
             else:
                 foeStrengthened = random.choice([enemy for enemy in enemies if not
-                                                 enemy.strengthened and not enemy.possessed])
+                enemy.strengthened and not enemy.possessed])
                 foeStrengthened.strengthened = 1
                 printWithPause(f'{self.getPrintName()} is empowering '
                                f'{foeStrengthened.getPrintName()}.')
@@ -294,7 +316,7 @@ class foe:
                 self.strengthened = 1
                 printWithPause(f'{self.getPrintName()} is empowering '
                                f'{self.getPrintName()}.')
-        
+
     def actAsAlienScientist(self, target, number, enemies):
         if not self.stun and percentChance(33):
             self.empowerEnemyAsScientist(enemies)
@@ -356,7 +378,7 @@ class foe:
     def actAsAlienPriest(self, target, number, enemies):
         if not self.stun:
             if (percentChance(33) and len([enemy for enemy in enemies if
-                                          enemy.type == 'alien worshipper']) <= 1 and
+                                           enemy.type == 'alien worshipper']) <= 1 and
                     self.recentSummonQty < 3):
                 self.newFoes.append(foe('alien worshipper', number, scanned=1))
                 number += 1
@@ -411,7 +433,6 @@ class foe:
 
         self.basicAttack(target, number, enemies)
         self.handleRecentSummonQty()
-
 
     def actAsAlienPilot(self, target, number, enemies):
         if not self.stun:
@@ -637,10 +658,21 @@ class foe:
     def getPrintName(self):
         return self.fullName if self.scanned else '???'
 
-    def actAsFoe(self, target, number, enemies):
+    def actAsFoe(self, target, number, enemies, player):
         self.getDamage(enemies)
 
         if self.hp > 0:
             self.attackMethod(target, number, enemies)
 
-        self.getHurtByDebuffs()
+        self.getHurtByDebuffs(player)
+
+    def getUpdate(self):
+        pass
+
+    def beHitByBaton(self):
+        self.hitsUntilStunnedByBaton -= 1
+
+        if self.hitsUntilStunnedByBaton <= 0:
+            self.stun += 2
+            self.hitsUntilStunnedByBaton = 5
+            printWithPause(f'{self.getPrintName()} was stunned by your baton.')

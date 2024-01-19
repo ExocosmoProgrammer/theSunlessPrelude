@@ -1,12 +1,13 @@
 import random
 
 from definitions import (lesser, printWithPause, getReducedDamage, percentChance, getTarget,
-                         getListOfThingsWithCommas)
+                         getListOfThingsWithCommas, greater)
 from variables import oneTimeUseItems
+from drone import drone
 
 
 class player:
-    def __init__(self):
+    def __init__(self, **extra):
         self.maxHp = 100
         self.hp = 100
         self.initialHp = 100
@@ -18,13 +19,35 @@ class player:
         self.damageReduction = 0
         self.stun = 0
         self.souls = []
+        self.newFoes = []
+        self.enemiesKilledInLevelFour = 0
+        self.sunPriestSpawned = 0
+        self.sunPriestSpotted = 0
+        self.standardAttack = 10
+        self.temporaryAttack = 0
+        self.temporaryAttackDuration = 0
+        self.hasReachedLevelFour = 0
+        self.hasReachedLevelTwo = 0
+        self.drone = drone()
+        self.isDrone = 0
+
+        for key in extra.keys():
+            exec(f'self.{key} = extra[key]')
 
     def showHp(self):
         hpDashCount = int(self.hp / 10)
         emptySpaceCount = int(self.maxHp / 10 - hpDashCount)
+        upgradeInventory = [item for item in self.inventory if item not in oneTimeUseItems]
+        oneTimeItemInventory = [item for item in self.inventory if item in oneTimeUseItems]
         printWithPause(f'You have {self.hp} hit points and {self.potions} potions.')
         printWithPause(f'[{"_" * hpDashCount}{" " * emptySpaceCount}]')
-        printWithPause(self.inventory)
+        printWithPause(f"Upgrade items: {upgradeInventory}")
+
+        if oneTimeItemInventory:
+            printWithPause(f"One time use items: {oneTimeItemInventory}")
+
+        if self.souls:
+            printWithPause(f"Souls: {[enemy.getPrintName() for enemy in self.souls]}")
 
     def heal(self, amount):
         self.hp = lesser(self.hp + amount, self.maxHp)
@@ -45,10 +68,12 @@ class player:
             try:
                 if enemy.type in ['alien priest', 'sun priest'] and [foe for foe in enemies if
                                                                      foe.type == 'alien worshipper'
-                                                                     and foe.hp > 0]:
+                                                                     and foe.hp > 0 and foe.possessed ==
+                                                                     enemy.possessed]:
                     attackedFoe = random.choice([foe for foe in enemies if
                                                  foe.type == 'alien worshipper'
-                                                 and foe.hp > 0])
+                                                 and foe.hp > 0 and foe.possessed ==
+                                                 enemy.possessed])
                     attackedFoe.hp = 0
                     printWithPause(f'{attackedFoe.getPrintName()} got in the way of your attack.')
 
@@ -68,20 +93,28 @@ class player:
                         printWithPause(f'You hit {enemy.getPrintName()} with a critical '
                                        f'attack, inflicting {damageInflicted} damage.')
 
-                        if self.inventory.count('baton'):
-                            enemy.stun = self.inventory.count('baton')
-                            printWithPause(f'You hit {enemy.getPrintName()} with your baton, '
-                                           f'stunning them for {enemy.stun} turns.')
-
                     enemy.hp -= damageInflicted
 
-                    if enemy.gunWeakness:
-                        damageInflicted = getReducedDamage(20, enemy)
+                    if 'baton' in self.inventory:
+                        enemy.beHitByBaton()
 
-                        for i in range(self.inventory.count('gun')):
-                            printWithPause(f'You shot {enemy.getPrintName()}, '
-                                           f'inflicting {damageInflicted} damage.')
-                            enemy.hp -= damageInflicted
+                    if enemy.gunWeakness and 'gun' in self.inventory:
+                        if enemy.type == 'alien commander' and [protector for protector in
+                                                                enemies if protector.type
+                                                                == 'alien protector']:
+                            printWithPause(f'You shot {enemy.getPrintName()}, but they were '
+                                           f'immune.')
+
+                        else:
+                            damageInflicted = getReducedDamage(self.attack * 3 / 4, enemy)
+
+                            for i in range(self.inventory.count('gun')):
+                                printWithPause(f'You shot {enemy.getPrintName()}, '
+                                               f'inflicting {damageInflicted} damage.')
+                                enemy.hp -= damageInflicted
+
+                            enemy.bleedingDamageFromGun = 6
+                            enemy.turnsOfBleedingFromGun = 3
 
             except AttributeError:
                 pass
@@ -90,11 +123,20 @@ class player:
             printWithPause('You are in an empty room.')
 
     def scan(self, enemies):
+        print('')
         printWithPause('The enemies in your room are:')
 
-        for enemy in enemies:
-            printWithPause(f'{enemy.getPrintName()} with {enemy.hp} hp')
-            enemy.scanned = 1
+        if 'radio' in self.inventory:
+            for enemy in enemies:
+                enemy.scanned = 1
+                printWithPause(f'   {enemy.fullName} with {enemy.hp} hp')
+
+        else:
+            for enemy in enemies:
+                printWithPause(f'   {enemy.getPrintName()} with {enemy.hp} hp')
+                enemy.scanned = 1
+
+        print('')
 
     def knifeAttack(self, enemies):
         targetId = input("Enter the id number of the foe you want to stab with "
@@ -104,15 +146,21 @@ class player:
         try:
             if enemy.type in ['alien priest', 'sun priest'] and [foe for foe in enemies if
                                                                  foe.type == 'alien worshipper'
-                                                                 and foe.hp > 0]:
+                                                                 and foe.hp > 0 and foe.possessed ==
+                                                                 enemy.possessed]:
                 attackedFoe = random.choice([foe for foe in enemies if
                                              foe.type == 'alien worshipper'
-                                             and foe.hp > 0])
+                                             and foe.hp > 0 and foe.possessed ==
+                                             enemy.possessed])
                 attackedFoe.hp = 0
                 printWithPause(f'{attackedFoe.getPrintName()} got in the way of your attack.')
 
+            elif enemy.type == 'alien commander' and [foe for foe in enemies if
+                                                      foe.type == 'alien protector']:
+                printWithPause(f'You stabbed {enemy.getPrintName()}, but they were immune.')
+
             else:
-                damageInflicted = getReducedDamage(5, enemy)
+                damageInflicted = getReducedDamage(self.attack / 2, enemy)
                 printWithPause(f'You stabbed {enemy.getPrintName()} '
                                f'with your knife, inflicting '
                                f'{damageInflicted} damage.')
@@ -130,15 +178,21 @@ class player:
             try:
                 if enemy.type in ['alien priest', 'sun priest'] and [foe for foe in enemies if
                                                                      foe.type == 'alien worshipper'
-                                                                     and foe.hp > 0]:
+                                                                     and foe.hp > 0 and foe.possessed ==
+                                                                     enemy.possessed]:
                     attackedFoe = random.choice([foe for foe in enemies if
                                                  foe.type == 'alien worshipper'
-                                                 and foe.hp > 0])
+                                                 and foe.hp > 0 and foe.possessed ==
+                                                 enemy.possessed])
                     attackedFoe.hp = 0
                     printWithPause(f'{attackedFoe.getPrintName()} got in the way of your attack.')
 
+                elif enemy.type == 'alien commander' and [foe for foe in enemies if
+                                                          foe.type == 'alien protector']:
+                    printWithPause(f'You slashed {enemy.getPrintName()}, but they were immune.')
+
                 else:
-                    damageInflicted = getReducedDamage(5, enemy)
+                    damageInflicted = getReducedDamage(self.attack / 2, enemy)
                     printWithPause(f'You slashed {enemy.getPrintName()} '
                                    f'with your butterfly knife, inflicting '
                                    f'{damageInflicted} damage.')
@@ -155,12 +209,17 @@ class player:
         try:
             if enemy.type in ['alien priest', 'sun priest'] and [foe for foe in enemies if
                                                                  foe.type == 'alien worshipper'
-                                                                 and foe.hp > 0]:
+                                                                 and foe.hp > 0 and foe.possessed ==
+                                                                 enemy.possessed]:
                 attackedFoe = random.choice([foe for foe in enemies if
                                              foe.type == 'alien worshipper'
-                                             and foe.hp > 0])
+                                             and foe.hp > 0 and foe.possessed ==
+                                             enemy.possessed])
                 attackedFoe.hp = 0
                 printWithPause(f'{attackedFoe.getPrintName()} got in the way of your attack.')
+
+            elif enemy.type == 'alien commander' and [foe for foe in enemies if enemy.type == 'alien protector']:
+                printWithPause(f'You hit {enemy.getPrintName()}, but they were immune.')
 
             else:
                 damageInflicted = getReducedDamage(10, enemy)
@@ -168,11 +227,6 @@ class player:
                                f'with your nunchucks, inflicting {damageInflicted} damage.')
                 enemy.hp -= damageInflicted
                 enemy.nunchuckDebuff = 1
-
-                for i in range(self.inventory.count('gun')):
-                    printWithPause(f'You shot {enemy.getPrintName()}, '
-                                   f'inflicting {damageInflicted} damage.')
-                    enemy.hp -= damageInflicted
 
         except AttributeError:
             pass
@@ -187,9 +241,18 @@ class player:
                 if enemy.type in ['alien pilot', 'alien warrior', 'sun priest']:
                     printWithPause(f'{enemy.getPrintName()} is immune to your solution.')
 
+                if enemy.type == 'alien priest' and [foe for foe in enemies if foe.type == 'alien worshipper'
+                                                     and foe.hp > 0 and foe.possessed ==
+                                                     enemy.possessed]:
+                    attackedFoe = random.choice([foe for foe in enemies if foe.type == 'alien worshipper'
+                                                 and foe.hp > 0 and foe.possessed ==
+                                                 enemy.possessed])
+                    attackedFoe.hp = 0
+                    printWithPause(f'{attackedFoe.getPrintName()} got in the way of your solution.')
+
                 else:
                     printWithPause(f'You hit {enemy.getPrintName()} with your solution, '
-                                   f'causing them to be possessed by you..')
+                                   f'causing them to be possessed by you.')
                     enemy.possessed = 1
                     self.inventory.remove('solution')
 
@@ -206,8 +269,21 @@ class player:
             enemy = getTarget(enemies, targetId)
 
             try:
-                printWithPause(f'You hit {enemy.getPrintName()} with your knife, poisoning them.')
-                enemy.poisonDamage = lesser(5, enemy.poisonDamage)
+                if enemy.type in ['alien priest', 'sun priest'] and [foe for foe in enemies if
+                                                                     foe.type == 'alien worshipper'
+                                                                     and foe.hp > 0 and foe.possessed ==
+                                                                     enemy.possessed]:
+                    attackedFoe = random.choice([foe for foe in enemies if
+                                                 foe.type == 'alien worshipper'
+                                                 and foe.hp > 0 and foe.possessed ==
+                                                 enemy.possessed])
+                    attackedFoe.hp = 0
+                    printWithPause(f'{attackedFoe.getPrintName()} got in the way of your attack.')
+
+                else:
+                    printWithPause(f'You hit {enemy.getPrintName()} with your knife, poisoning them.')
+                    enemy.poisonDamage = lesser(5, enemy.poisonDamage)
+
                 self.inventory.remove('throwing knife')
 
             except AttributeError:
@@ -218,7 +294,7 @@ class player:
 
     def useStunGrenade(self, enemies):
         if 'stun grenade' in self.inventory:
-            for enemy in enemies:
+            for enemy in [enemy for enemy in enemies if not enemy.possessed]:
                 enemy.stun = 2
                 printWithPause(f'You stunned {enemy.getPrintName()} with your stun grenade.')
 
@@ -228,15 +304,28 @@ class player:
             printWithPause('You do not have a stun grenade.')
 
     def useVialOfPoison(self, enemies):
-        if 'throwing knife' in self.inventory:
+        if 'vial of poison' in self.inventory:
             targetId = input('Enter the id number of the foe you want to throw your vial '
                              "at or 'r' to target a random foe:")
             enemy = getTarget(enemies, targetId)
 
             try:
-                printWithPause(f'You hit {enemy.getPrintName()} with your vial, poisoning them.')
-                enemy.poisonDamage = 15
-                self.inventory.remove('throwing knife')
+                if enemy.type in ['alien priest', 'sun priest'] and [foe for foe in enemies if
+                                                                     foe.type == 'alien worshipper'
+                                                                     and foe.hp > 0 and foe.possessed ==
+                                                                     enemy.possessed]:
+                    attackedFoe = random.choice([foe for foe in enemies if
+                                                 foe.type == 'alien worshipper'
+                                                 and foe.hp > 0 and foe.possessed ==
+                                                 enemy.possessed])
+                    attackedFoe.hp = 0
+                    printWithPause(f'{attackedFoe.getPrintName()} got in the way of your attack.')
+
+                else:
+                    printWithPause(f'You hit {enemy.getPrintName()} with your vial, poisoning them.')
+                    enemy.poisonDamage = 15
+
+                self.inventory.remove('vial of poison')
 
             except AttributeError:
                 pass
@@ -244,13 +333,77 @@ class player:
         else:
             printWithPause('You do not have a vial of poison.')
 
+    def useSerratedKnife(self, enemies):
+        if 'serrated knife' in self.inventory:
+            targetId = input('Enter the id number of the foe you want to throw your serrated knife '
+                             "at or 'r' to target a random foe:")
+            enemy = getTarget(enemies, targetId)
+
+            try:
+                if enemy.type in ['alien priest', 'sun priest'] and [foe for foe in enemies if
+                                                                     foe.type == 'alien worshipper'
+                                                                     and foe.hp > 0 and foe.possessed ==
+                                                                     enemy.possessed]:
+                    attackedFoe = random.choice([foe for foe in enemies if
+                                                 foe.type == 'alien worshipper'
+                                                 and foe.hp > 0 and foe.possessed ==
+                                                 enemy.possessed])
+                    attackedFoe.hp = 0
+                    printWithPause(f'{attackedFoe.getPrintName()} got in the way of your attack.')
+
+                else:
+                    printWithPause(f'You hit {enemy.getPrintName()} with your knife, causing them to bleed.')
+                    enemy.bleedingDamage = 5
+
+                self.inventory.remove('serrated knife')
+
+            except AttributeError:
+                pass
+
+        else:
+            printWithPause('You do not have a serrated knife.')
+
+    def useCombustibleLemon(self, enemies):
+        if 'combustible lemon' in self.inventory:
+            targetId = input('Enter the id number of the foe you want to throw your combustible lemon '
+                             "at or 'r' to target a random foe:")
+            enemy = getTarget(enemies, targetId)
+
+            try:
+                if enemy.type in ['alien priest', 'sun priest'] and [foe for foe in enemies if
+                                                                     foe.type == 'alien worshipper'
+                                                                     and foe.hp > 0 and foe.possessed ==
+                                                                     enemy.possessed]:
+                    attackedFoe = random.choice([foe for foe in enemies if
+                                                 foe.type == 'alien worshipper'
+                                                 and foe.hp > 0 and foe.possessed ==
+                                                 enemy.possessed])
+                    attackedFoe.hp = 0
+                    printWithPause(f'{attackedFoe.getPrintName()} got in the way of your attack.')
+
+                else:
+                    printWithPause(f'You hit {enemy.getPrintName()} with your combustible lemon, poisoning them. '
+                                   f'The lemon combusted, burning {enemy.getPrintName()}.', 2)
+                    enemy.poisonDamage = 15
+                    enemy.burnDamage = 15
+
+                self.inventory.remove('combustible lemon')
+
+            except AttributeError:
+                pass
+
+        else:
+            printWithPause('You do not have a combustible lemon.')
+
     def useOneTimeUseItem(self, enemies):
+        print('')
         printWithPause('Your one time use items are:')
 
         for item in self.inventory:
             if item in oneTimeUseItems:
-                printWithPause(item)
+                printWithPause(f'   {item}')
 
+        print('')
         itemUsed = input(f'What item will you use:')
 
         if itemUsed == 'solution':
@@ -265,6 +418,12 @@ class player:
         elif itemUsed == 'vial of poison':
             self.useVialOfPoison(enemies)
 
+        elif itemUsed == 'serrated knife':
+            self.useSerratedKnife(enemies)
+
+        elif itemUsed == 'combustible lemon':
+            self.useCombustibleLemon(enemies)
+
     def usePotion(self):
         if self.potions > 0:
             oldHp = self.hp
@@ -276,18 +435,63 @@ class player:
             printWithPause('You do not have a potion.')
 
     def updateStats(self):
-        self.attack = 10 + self.inventory.count('sword') * 5
+        self.standardAttack = 10 + self.inventory.count('sword') * 5
         self.maxHp = self.initialHp + self.inventory.count('armor') * 15
+        self.attack = self.temporaryAttack + self.standardAttack
+
+        if self.temporaryAttackDuration <= 0:
+            self.temporaryAttack = 0
+
+        else:
+            self.temporaryAttackDuration -= 1
+
+    def releaseSoul(self):
+        soulId = input("Type the id of the soul you want to release:")
+        soul = [enemy for enemy in self.souls if enemy.number == int(soulId)][0]
+        self.souls.remove(soul)
+        self.newFoes.append(soul)
+        printWithPause(f"You released the soul of {soul.getPrintName()}.")
+
+    def useSacrificialDagger(self):
+        hpSacrificed = int(input('How much hp will you turn into extra temporary attack:'))
+
+        if hpSacrificed > 0:
+            printWithPause(f'You got {hpSacrificed} extra temporary attack and lost {hpSacrificed} hp.')
+            self.temporaryAttackDuration = 3
+            self.temporaryAttack = hpSacrificed
+            self.hp -= hpSacrificed
+
+    def getCustomInput(self):
+        action = input("What will you do? Type 'y' to exit the terminal for custom inputs:")
+
+        if action != 'y':
+            try:
+                exec(action)
+
+            except Exception as error:
+                printWithPause(f'Your command raised an error saying, "{error}."')
+
+            self.getCustomInput()
 
     def actions(self, enemies, level):
         self.blocking = 0
         self.damageReduction = 0
+
+        if not self.sunPriestSpotted and self.enemiesKilledInLevelFour >= 15:
+            self.sunPriestSpotted = 1
+            printWithPause("You have made a gap in the mob surrounding you. Through the gap, you "
+                           "see a cathedral in the distance.", 5)
 
         if self.stun:
             self.stun = 0
             printWithPause('You are stunned.')
 
         else:
+            if 'sacrificial dagger' in self.inventory and self.temporaryAttackDuration <= 0 \
+                    and input("Will you use your sacrificial dagger? y/n:") == 'y':
+                self.useSacrificialDagger()
+
+            self.updateStats()
             actionList = ["Type 'a' to perform a basic attack", "'s' to scan"]
 
             if self.potions:
@@ -302,7 +506,12 @@ class player:
             if 'nunchucks' in self.inventory:
                 actionList.append("'n' to use your nunchucks")
 
-            if not [enemy for enemy in enemies if not enemy.possessed] and level < 4:
+            if self.souls:
+                actionList.append("'r' to release a soul")
+
+            if not [enemy for enemy in enemies if not enemy.possessed] and level < 4 or (self.enemiesKilledInLevelFour
+                                                                                         >= 15
+                                                                                         and not self.sunPriestSpawned):
                 actionList.append("'y' to progress to the next area")
 
             action = input(getListOfThingsWithCommas('or', actionList, ':'))
@@ -326,22 +535,30 @@ class player:
             elif action == 'n' and 'nunchucks' in self.inventory:
                 self.useNunchucks(enemies)
 
-            elif (action == 'y' and not [enemy for enemy in enemies if not enemy.possessed]
-                  and level < 4):
+            elif action == 'r' and self.souls:
+                self.releaseSoul()
+
+            elif action == 'y' and (not [enemy for enemy in enemies if not enemy.possessed]
+                                    and level < 4 or self.enemiesKilledInLevelFour >= 15):
                 return 1
 
+            elif action == 'other':
+                self.getCustomInput()
+
             for i in range(self.inventory.count('knife')):
-                if [enemy for enemy in enemies if enemy.hp > 0]:
+                if [enemy for enemy in enemies if enemy.hp > 0 and not enemy.possessed]:
                     self.knifeAttack(enemies)
 
             for i in range(self.inventory.count('butterfly knife')):
-                if [enemy for enemy in enemies if enemy.hp > 0]:
+                if [enemy for enemy in enemies if enemy.hp > 0 and not enemy.possessed]:
                     self.butterflyKnifeAttack(enemies)
+
+            if 'drone' in self.inventory:
+                self.drone.actions(enemies, self)
 
     def performNecessaryFunctions(self, enemies, level):
         self.showHp()
         self.getRegen()
-        self.updateStats()
 
         if self.actions(enemies, level):
             return 1

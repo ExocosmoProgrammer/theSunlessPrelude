@@ -1,0 +1,190 @@
+import random
+
+from definitions import (getTarget, printWithPause, getReducedDamage, lesser, greater,
+                         getListOfThingsWithCommas)
+
+
+class drone:
+    def __init__(self):
+        self.inventory = []
+        self.attack = 5
+        self.standardAttack = 5
+        self.temporaryAttack = 0
+        self.temporaryAttackDuration = 0
+        self.hp = 100
+        self.foe = 0
+        self.damageReduction = 0
+        self.isDrone = 1
+
+    def basicAttack(self, enemies, protagonist):
+        if enemies:
+            targetId = input("Enter the id number of the foe you want your drone to attack or "
+                             "'r' to attack a random foe:")
+
+            enemy = getTarget(enemies, targetId)
+
+            try:
+                if (enemy.type in ['alien priest', 'sun priest'] and
+                        [foe for foe in enemies if
+                         foe.type == 'alien worshipper'
+                         and foe.hp > 0 and foe.possessed ==
+                         enemy.possessed]):
+                    attackedFoe = random.choice([foe for foe in enemies if
+                                                 foe.type == 'alien worshipper'
+                                                 and foe.hp > 0 and foe.possessed ==
+                                                 enemy.possessed])
+                    attackedFoe.hp = 0
+                    printWithPause(f'{attackedFoe.getPrintName()} got in the way of '
+                                   f'your drone\'s attack.')
+
+                elif enemy.type == 'alien commander' and [foe for foe in enemies if
+                                                          foe.type == 'alien protector']:
+                    printWithPause(f'Your drone hit {enemy.getPrintName()}, but they were immune.')
+
+                else:
+                    damageInflicted = getReducedDamage(protagonist.attack / 2, enemy)
+                    printWithPause(f'Your drone hit {enemy.getPrintName()}, inflicting '
+                                   f'{damageInflicted} '
+                                   f'damage.')
+
+                    enemy.hp -= damageInflicted
+
+                    if 'baton' in self.inventory:
+                        enemy.beHitByBaton()
+
+                    if enemy.gunWeakness and 'gun' in self.inventory:
+                        if enemy.type == 'alien commander' and [protector for protector in
+                                                                enemies if protector.type
+                                                                == 'alien protector']:
+                            printWithPause(f'Your drone shot {enemy.getPrintName()}, but they were '
+                                           f'immune.')
+
+                        else:
+                            damageInflicted = getReducedDamage(self.attack * 3 / 4, enemy)
+
+                            for i in range(self.inventory.count('gun')):
+                                printWithPause(f'Your drone shot {enemy.getPrintName()}, '
+                                               f'inflicting {damageInflicted} damage.')
+                                enemy.hp -= damageInflicted
+
+                            enemy.bleedingDamageFromGun = greater(3, enemy.bleedingDamageFromGun)
+                            enemy.turnsOfBleedingFromGun = 3
+
+            except AttributeError:
+                pass
+
+        else:
+            printWithPause('You are in an empty room.')
+
+    def scan(self, enemies, protagonist):
+        print('')
+        printWithPause('The enemies in your room are:')
+
+        if 'radio' in protagonist.inventory:
+            for enemy in enemies:
+                enemy.scanned = 1
+                printWithPause(f'   {enemy.fullName}')
+
+        else:
+            for enemy in enemies:
+                printWithPause(f'   {enemy.getPrintName()}')
+                enemy.scanned = 1
+
+        print('')
+
+    def updateStats(self):
+        self.hp = greater(self.hp, 0)
+        self.standardAttack = 5
+        self.attack = self.temporaryAttack + self.standardAttack
+
+        if self.temporaryAttackDuration <= 0:
+            self.temporaryAttack = 0
+
+        else:
+            self.temporaryAttackDuration -= 1
+
+    def giveItemToPro(self, protagnoist):
+        print('')
+        print('Your drone\'s items are:')
+
+        for thing in self.inventory:
+            print(f'    {thing}')
+
+        print('')
+        item = input('What item will you get from your drone:')
+
+        if protagnoist.inventory.count(item) < 2:
+            try:
+                self.inventory.remove(item)
+                protagnoist.inventory.append(item)
+                print(f'Your drone gave you {item}.')
+
+            except ValueError:
+                print(f'Your drone does not have {item}.')
+
+        else:
+            print(f'You cannot hold another {item}. Your drone keeps the {item}.')
+
+    def useSacrificialDagger(self, protagonist):
+        hpSacrificed = int(input('How much of your hp will your drone turn '
+                                 'into extra temporary attack:'))
+
+        if hpSacrificed > 0:
+            printWithPause(f'You got {hpSacrificed} extra temporary attack and lost {hpSacrificed} hp.')
+            self.temporaryAttackDuration = 3
+            self.temporaryAttack = hpSacrificed
+            protagonist.hp -= hpSacrificed
+
+    def actions(self, enemies, protagonist):
+        self.hp = greater(self.hp, 0)
+        self.showHp(protagonist)
+
+        if 'sacrificial dagger' in self.inventory and self.temporaryAttackDuration <= 0 < self.hp \
+                and input("Will you use your sacrificial dagger? y/n:") == 'y':
+            self.useSacrificialDagger(protagonist)
+
+        self.updateStats()
+        actionList = ["Press 'h' to make your drone use a potion"]
+
+        if self.hp:
+            actionList += ["'a' to make your drone perform a basic attack",
+                           "'s' to make your drone scan"]
+
+            if self.inventory:
+                actionList.append("'t' to get an item from your drone")
+
+        action = input(getListOfThingsWithCommas('or', actionList, ending=':'))
+
+        if action == 'h':
+            self.heal(protagonist)
+
+        elif action == 't' and self.inventory:
+            self.giveItemToPro(protagonist)
+
+        elif self.hp:
+            if action == 'a':
+                self.basicAttack(enemies, protagonist)
+
+            elif action == 's':
+                self.scan(enemies, protagonist)
+
+    def heal(self, protagonist):
+        if protagonist.potions:
+            hp = self.hp
+            self.hp = lesser(self.hp + 50, 100)
+            printWithPause(f'Your drone used a potion, restoring {self.hp - hp} hit points '
+                           f'to your drone.')
+            protagonist.potions -= 1
+
+        else:
+            print(f'You do not have a potion.')
+
+    def showHp(self, protagonist):
+        hpDashCount = int(self.hp / 10)
+        emptySpaceCount = int(10 - hpDashCount)
+        printWithPause(f'Your drone has {self.hp} hit points, and you '
+                       f'have {protagonist.potions} potions.')
+        printWithPause(f'[{"_" * hpDashCount}{" " * emptySpaceCount}]')
+
+        if self.inventory:
+            print(f'Drone inventory: {self.inventory}')

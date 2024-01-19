@@ -1,49 +1,61 @@
 import random
+import sys
+import os
 
 from variables import foesPerLevel, bossesPerLevel, oneTimeUseItems
-from definitions import printWithPause, percentChance, greater
+from definitions import printWithPause, percentChance, greater, saveWithPickle, loadWithPickle, \
+    getListOfThingsWithCommas, play
 from player import player
 from foe import foe
 
-number = 2
-room = 1
-level = 1
-pro = player()
-foes = [foe('alien soldier', 1)]
-printWithPause('Day 12', 3)
-levelFourSpawnCooldown = 0
-enemiesKilledInLevelFour = 0
-sunPriestSpawned = 0
-playerClass = None
-canonCooldown = 3
 
-file = 0
+def startGame():
+    global number, room, level, pro, foes, levelFourSpawnCooldown, playerClass, canonCooldown, file, victorious
+    victorious = 0
+    number = 2
+    room = 1
+    level = 1
+    pro = player()
+    foes = [foe('alien soldier', 1)]
+    printWithPause('Day 12', 3)
+    levelFourSpawnCooldown = 0
+    playerClass = None
+    canonCooldown = 3
 
-while file not in [1, 2, 3, 4]:
-    try:
-        file = int(input('Choose your file. Type the file number in 1-4:'))
+    file = 0
 
-    except ValueError:
-        pass
+    while file not in [1, 2, 3, 4]:
+        try:
+            file = int(input('Choose your file. Type the file number in 1-4:'))
 
-while playerClass not in ['police', 'soldier', 'citizen']:
-    playerClass = input("Pick your class. The choices are 'police', 'soldier', and 'citizen':")
+        except ValueError:
+            pass
 
-if playerClass == 'police':
-    pro.maxHp = 75
-    pro.inventory = ['gun', 'baton']
+    while playerClass not in ['police', 'soldier', 'citizen']:
+        playerClass = input("Pick your class. The choices are 'police', 'soldier', and 'citizen':")
 
-elif playerClass == 'soldier':
-    pro.maxHp = 100
-    pro.inventory = ['knife', 'shield']
-    pro.updateStats()
+    if playerClass == 'police':
+        pro.maxHp = 100
+        pro.inventory = ['gun', 'baton']
 
-elif playerClass == 'citizen':
-    pro.maxHp = 150
-    pro.inventory = ['regen'] * 2
+    elif playerClass == 'soldier':
+        pro.maxHp = 100
+        pro.inventory = ['knife', 'shield', 'cross', 'nunchucks', 'sacrificial dagger', 'radio', 'hissing cockroach',
+                         'gas canister', 'vial of diseased blood', 'stun grenade', 'baton', 'gun', 'regen',
+                         'butterfly knife']
+        pro.inventory = ['knife', 'shield', 'armor', 'armor', 'sword', 'sword', 'combustible lemon']
+        pro.inventory = ['knife', 'shield']
+        pro.updateStats()
 
-pro.hp = pro.maxHp
-pro.initialHp = pro.hp
+    elif playerClass == 'citizen':
+        pro.maxHp = 150
+        pro.inventory = ['regen'] * 2
+
+    pro.hp = pro.maxHp
+    pro.initialHp = pro.hp
+
+
+startGame()
 
 
 def addFoes():
@@ -82,25 +94,65 @@ def addBoss():
 
 
 def removeFoes():
-    global foes, number, enemiesKilledInLevelFour
+    global foes, number, victorious
 
     for enemy in foes:
         if enemy.hp <= 0:
             foes.remove(enemy)
-            printWithPause(f'{enemy.getPrintName()} is dead.')
+            getRidOfFoe = 1
 
-            if level == 4:
-                enemiesKilledInLevelFour += 1
+            if 'cross' in pro.inventory and not enemy.possessed and enemy.type not in ['alien commander',
+                                                                                       'alien pilot', 'alien warrior',
+                                                                                       'sun priest']:
+                if len(pro.souls) < 2:
+                    if input(f"Will you take {enemy.getPrintName()}'s soul? y/n:") == 'y':
+                        enemy.hp = enemy.initialHp / 2
+                        enemy.attack /= 2
+                        enemy.possessed = 1
+                        enemy.controlledByPro = 1
+                        pro.souls.append(enemy)
+                        enemy.scanned = 1
+                        printWithPause(f"You gained {enemy.getPrintName()}'s soul, costing you {enemy.hp} hp.")
+                        pro.hp -= enemy.hp
+                        enemy.bleedingDamage = 0
+                        enemy.poisonDamage = 0
+                        enemy.stun = 0
+                        getRidOfFoe = 0
 
-            for key in enemy.loot.keys():
-                if percentChance(enemy.loot[key]) and (key not in oneTimeUseItems or
-                                                       pro.inventory.count(key) < 3):
-                    pro.inventory.append(key)
-                    printWithPause(f'You got {key}.', 1)
+                    else:
+                        printWithPause(f'{enemy.getPrintName()} is dead.')
+                        printWithPause(f"You left behind {enemy.getPrintName()}'s soul.")
 
-            if enemy.givesPotions and percentChance(25):
-                pro.potions += 1
-                printWithPause('You acquired a potion.')
+                else:
+                    printWithPause("You cannot hold another soul.")
+
+            if getRidOfFoe:
+                printWithPause(f'{enemy.getPrintName()} is dead.')
+
+                if level == 4:
+                    pro.enemiesKilledInLevelFour += 1
+
+                for key in enemy.loot.keys():
+                    if percentChance(enemy.loot[key]):
+                        if key not in oneTimeUseItems or pro.inventory.count(key) < 2:
+                            pro.inventory.append(key)
+                            printWithPause(f'You got {key}.', 1)
+
+                        elif 'drone' in pro.inventory and pro.drone.inventory.count(key) == 0:
+                            printWithPause(f'You found {key}. You could '
+                                           f'not pick it up, but your drone did. ')
+                            pro.drone.inventory.append(key)
+
+                        elif 'drone' in pro.inventory:
+                            printWithPause(f'You found {key}, but neither you nor your drone '
+                                           f'could pick the {key} up.')
+
+                        else:
+                            printWithPause(f'You found {key}. You could not pick it up.')
+
+                if enemy.givesPotions and percentChance(25):
+                    pro.potions += 1
+                    printWithPause('You acquired a potion.')
 
             if enemy.type == 'alien commander':
                 foes = []
@@ -126,7 +178,7 @@ def removeFoes():
                 pro.potions += 5
                 number = 1
                 printWithPause('You got 5 potions.')
-                printWithPause("Before you could finish killing the pilot, he disabled "
+                printWithPause("Before you can finish killing the pilot, he disables "
                                "the ship's controls and alerts other pilots that "
                                "the ship is being taken over.", 6)
                 printWithPause('The pilot is dead now.', 4)
@@ -155,6 +207,7 @@ def removeFoes():
                 printWithPause("Cause chaos.", 5)
                 printWithPause('Continued in chapter IV...', 5)
                 pro.hasReachedLevelFour = 1
+                foes = []
 
             elif enemy.type == 'sun priest':
                 while input('Will you proceed? y/n:') != 'y':
@@ -162,7 +215,7 @@ def removeFoes():
 
                 printWithPause('You killed the sun priest.', 5)
                 printWithPause("You are victorious.", 5)
-                printWithPause("You sit back and wait to die.", 5)
+                printWithPause("You sit back and wait to die, glad to have saved your planet.", 5)
                 printWithPause("Once you killed the priest, Earth's sun "
                                "disappeared.", 5)
                 printWithPause("...", 5)
@@ -171,9 +224,9 @@ def removeFoes():
                 printWithPause("The alien troops will never attack your "
                                "planet again.", 5)
                 printWithPause('You died.', 10)
-
-                while True:
-                    pass
+                input('Press enter to proceed:')
+                pro.hp = 0
+                victorious = 1
 
 
 def handleCanon():
@@ -186,6 +239,10 @@ def handleCanon():
             canonCooldown = room + 3
             pro.hp -= 40
             printWithPause(f'You were hit by a canon shot, inflicting 40 damage.')
+
+            if 'drone' in pro.inventory:
+                pro.drone.hp -= 40
+                printWithPause('Your drone was hit by a canon shot, inflicting 40 damage.')
 
             for enemy in foes:
                 enemy.hp -= 40
@@ -211,7 +268,7 @@ def addSummons():
 
 
 def handleLevelFourSpawning():
-    if level == 4 and not sunPriestSpawned:
+    if level == 4 and not pro.sunPriestSpawned:
         global levelFourSpawnCooldown, number
 
         if levelFourSpawnCooldown <= 0:
@@ -225,82 +282,195 @@ def handleLevelFourSpawning():
 
 
 def handleLevelFourBossSpawn():
-    global sunPriestSpawned, foes, number
-
-    if enemiesKilledInLevelFour >= 15 and not sunPriestSpawned:
-        sunPriestSpawned = 1
-        foes = [foe('sun priest', number, scanned=1)]
-        printWithPause("You escaped the mob attacking you and found the priest controlling "
-                       "Earth's sun.", 5)
-        printWithPause('Kill the priest.')
-        number += 1
+    global foes, number
+    pro.sunPriestSpawned = 1
+    foes = [foe('sun priest', number, scanned=1)]
+    printWithPause("You escaped the mob attacking you and fled to the cathedral.", 5)
+    printWithPause("Inside the cathedral, you found the priest controlling Earth's sun.", 5)
+    printWithPause('Kill the priest.', 5)
+    number += 1
 
 
-while pro.hp > 0:
-    removeFoes()
-    printWithPause(f'{level}-{room}')
+def saveGame():
+    saveWithPickle(pro, f'playerSave{file}.pickle')
+    variousData = {'level': level, 'room': room, 'foes': foes, 'number': number, 'canonCooldown': canonCooldown}
+    saveWithPickle(variousData, f'variousData{file}.pickle')
 
-    if pro.performNecessaryFunctions(foes, level):
 
-        if room < 4:
-            addFoes()
-
-        elif room == 4:
-            addBoss()
-
-        else:
-            level += 1
-            room = 0
-            addFoes()
-
-        if level == 3:
-            canonCooldown = room + 2
-            printWithPause(f'The canon must readjust its aim. You will be shot by a '
-                           f'canon in {canonCooldown} turns.')
-
-        removeFoes()
-
-    else:
-        removeFoes()
-        addSummons()
-        possessedFoes = [adversary for adversary in foes if adversary.possessed]
+def loadGame():
+    try:
+        global pro, level, room, foes, number, canonCooldown
+        pro = loadWithPickle(f'playerSave{file}.pickle')
+        variousData = loadWithPickle(f'variousData{file}.pickle')
+        level = variousData['level']
+        room = variousData['room']
+        foes = variousData['foes']
+        number = variousData['number']
+        canonCooldown = variousData['canonCooldown']
 
         for enemy in foes:
-            if not enemy.possessed:
+            enemy.getUpdate()
 
-                if possessedFoes and percentChance(50):
-                    enemy.actAsFoe(random.choice(possessedFoes), number, foes)
+    except FileNotFoundError:
+        pass
 
-                else:
-                    enemy.actAsFoe(pro, number, foes)
-                    addSummons()
 
-            else:
-                try:
-                    otherFoes = [enemy for enemy in foes if not enemy.possessed]
-                    enemy.actAsFoe(random.choice(otherFoes), number, foes)
+def handleDeath():
+    global number, room, foes, level
+    proceed = False
+    actions = ["'e' to exit the game", "'1' to start at level 1"]
+    hasReachedLevelTwo = pro.hasReachedLevelTwo
+    hasReachedLevelFour = pro.hasReachedLevelFour
+    os.remove(f'playerSave{file}.pickle')
+    os.remove(f'variousData{file}.pickle')
+    startGame()
+    pro.hasReachedLevelFour = hasReachedLevelFour
+    pro.hasReachedLevelTwo = hasReachedLevelTwo
 
-                except IndexError:
-                    pass
+    if pro.hasReachedLevelTwo:
+        actions.append("'2' to start at level 2")
 
-        addSummons()
-        handleCanon()
-        removeFoes()
-        handleLevelFourSpawning()
-        handleLevelFourBossSpawn()
+    if pro.hasReachedLevelFour:
+        actions.append("'4' to start at level 4")
 
-if level == 1:
-    printWithPause('You died. The alien troops will destroy the world.', 5)
+    if len(actions) >= 3:
+        options = getListOfThingsWithCommas('or', actions, ':', 'Type ')
 
-elif level < 4:
-    printWithPause('You died. The alien troops will return. Without you, they will '
-                   'have little resistance in destroying the world.', 5)
+    else:
+        options = "Type 'e' to exit the game or '1' to start at level 1:"
 
-else:
-    printWithPause("Your efforts were all for nothing. The alien troops will return "
-                   "to destroy the world.", 5)
+    number = 1
+    foes = []
+    room = 0
 
-printWithPause('Game over', 2)
+    while not proceed:
+        action = input(options)
+        proceed = True
+
+        if action == 'e':
+            sys.exit()
+
+        elif action == '1':
+            level = 1
+            number = 2
+            foes = [foe('alien soldier', 1)]
+            room = 1
+            pro.potions = 3
+
+        elif action == '2' and pro.hasReachedLevelTwo:
+            level = 2
+            pro.potions = 5
+
+        elif action == '4' and pro.hasReachedLevelFour:
+            level = 4
+            room = 1
+            pro.potions = 25
+
+        else:
+            proceed = False
+
+        getLootForRetry(level)
+
+
+def getLootForRetry(initialLevel):
+    if initialLevel > 1:
+        for i in range(1, initialLevel):
+            foesForLoot = [foe(random.choice(foesPerLevel[i]), 1) for j in range(8)]
+
+            for enemy in foesForLoot:
+                for key in enemy.loot.keys():
+                    if percentChance(enemy.loot[key]) and (key not in oneTimeUseItems or
+                                                           pro.inventory.count(key) < 3):
+                        pro.inventory.append(key)
+                        printWithPause(f'You got {key}.', 1)
+
+        if initialLevel == 2:
+            pro.potions = 5
+
+        else:
+            pro.potions = 25
+
+
+loadGame()
 
 while True:
-    pass
+    while pro.hp > 0:
+        saveGame()
+        removeFoes()
+        printWithPause(f'{level}-{room}')
+        progress = pro.performNecessaryFunctions(foes, level)
+        foes += pro.newFoes
+        pro.newFoes = []
+
+        if progress:
+            if level == 4:
+                handleLevelFourBossSpawn()
+
+            elif room < 4:
+                addFoes()
+
+            elif room == 4:
+                addBoss()
+
+            else:
+                level += 1
+                room = 0
+                addFoes()
+
+            if level == 3:
+                canonCooldown = room + 2
+                printWithPause(f'The canon must readjust its aim. You will be shot by a '
+                               f'canon in {canonCooldown} turns.')
+
+            removeFoes()
+
+        else:
+            removeFoes()
+            addSummons()
+            possessedFoes = [adversary for adversary in foes if adversary.possessed]
+
+            for enemy in foes:
+                if not enemy.possessed:
+                    targetList = [[pro]]
+
+                    if possessedFoes:
+                        targetList.append(possessedFoes)
+
+                    if 'drone' in pro.inventory:
+                        targetList.append([pro.drone])
+
+                    enemy.actAsFoe(random.choice(random.choice(targetList)), number, foes, pro)
+
+                else:
+                    try:
+                        otherFoes = [enemy for enemy in foes if not enemy.possessed]
+                        enemy.actAsFoe(random.choice(otherFoes), number, foes, pro)
+
+                    except IndexError:
+                        pass
+
+            addSummons()
+            handleCanon()
+            removeFoes()
+            handleLevelFourSpawning()
+
+    if level == 1:
+        printWithPause('You died. The alien troops will destroy the world.', 5)
+
+    elif level < 4:
+        printWithPause('You died. The alien troops will return. Without you, they will '
+                       'have little resistance in destroying the world.', 5)
+
+    elif not victorious:
+        printWithPause("Your efforts were all for nothing. The alien troops will return "
+                       "to destroy the world.", 5)
+
+    if input(f'Will you play again? y/n:') == 'y':
+        for i in range(50):
+            print('')
+
+        handleDeath()
+
+    else:
+        saveGame()
+        sys.exit()

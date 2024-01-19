@@ -1,7 +1,7 @@
 import random
 
 from variables import bossesPerLevel
-from definitions import printWithPause, getReducedDamage, greater, percentChance
+from definitions import printWithPause, getReducedDamage, greater, percentChance, getTarget
 
 hpPerFoe = {'alien colonist': 10, 'alien bodyguard': 20, 'alien police': 30,
             'alien soldier': 40, 'alien secret service': 50, 'alien commander': 200,
@@ -10,28 +10,34 @@ hpPerFoe = {'alien colonist': 10, 'alien bodyguard': 20, 'alien police': 30,
             'alien scientist': 50, 'alien henchman': 75, 'alien pilot': 500,
             'alien combat scientist': 30, 'alien warrior': 750, 'alien doctor': 10,
             'alien priest': 30, 'alien worshipper': 1, 'alien gangster': 30,
-            'alien cultist': 30, 'alien nun': 50, 'sun priest': 0}
+            'alien cultist': 30, 'alien nun': 50, 'sun priest': 3000, 'alien bishop': 50,
+            'alien cardinal': 1}
 attackPerFoe = {'alien colonist': 2, 'alien bodyguard': 3, 'alien police': 6,
                 'alien soldier': 7, 'alien secret service': 8, 'alien commander': 5,
                 'alien attacker': 15, 'alien protector': 0, 'drone': 3, 'idol': 5,
                 'alien assassin': 15, 'alien minion': 5, 'alien general': 4,
                 'alien scientist': 6, 'alien henchman': 8, 'alien pilot': 10,
                 'alien combat scientist': 6, 'alien warrior': 20, 'alien doctor': 5,
-                'alien priest': 1, 'alien worshipper': 5, 'alien gangster': 10,
-                'alien cultist': 7, 'alien nun': 5, 'sun priest': 5}
-lootPerFoe = {'alien colonist': {'regen': 15}, 'alien bodyguard': {'shield': 15},
-              'alien police': {'baton': 15}, 'alien soldier': {'knife': 15},
-              'alien secret service': {'gun': 15}, 'alien assassin': {'stun grenade': 100},
-              'alien minion': {'throwing knife': 100}, 'alien scientist': {'solution': 100},
-              'alien general': {'sword': 50}, 'alien henchman': {'armor': 50},
-              'alien combat scientist': {'solution': 100},
+                'alien priest': 5, 'alien worshipper': 1, 'alien gangster': 10,
+                'alien cultist': 7, 'alien nun': 5, 'sun priest': 5, 'alien bishop': 5,
+                'alien cardinal': 5}
+lootPerFoe = {'alien colonist': {'regen': 10}, 'alien bodyguard': {'shield': 10},
+              'alien police': {'baton': 10}, 'alien soldier': {'knife': 10},
+              'alien secret service': {'gun': 10}, 'alien assassin': {'stun grenade': 100,
+                                                                      'gas canister': 10},
+              'alien minion': {'throwing knife': 100, 'radio': 10},
+              'alien scientist': {'solution': 100, 'combustible lemon': 1, 'hissing cockroach': 10},
+              'alien general': {'sword': 50, 'drone': 10},
+              'alien henchman': {'armor': 50, 'serrated knife': 100, 'vial of diseased blood': 10},
+              'alien combat scientist': {'solution': 100, 'combustible lemon': 1, 'hissing cockroach': 15},
               'alien doctor': {'solution': 50, 'throwing knife': 50},
-              'alien cultist': {'vial of poison': 100}, 'alien nun': {'nunchucks': 15},
-              'alien priest': {'cross': 15}, 'alien gangster': {'butterfly knife': 15}}
+              'alien cultist': {'vial of poison': 100}, 'alien nun': {'nunchucks': 10},
+              'alien priest': {'cross': 10}, 'alien gangster': {'butterfly knife': 10}}
 
 
 class foe:
-    def __init__(self, name, number, scanned=0, givesPotions=1, possessed=0, loot=None):
+    def __init__(self, name, number, scanned=0, givesPotions=1, possessed=0, loot=None,
+                 controlledByPro=0):
         self.type = name
         self.number = number
         self.scanned = scanned
@@ -45,6 +51,8 @@ class foe:
         self.stun = 0
         self.foe = 1
         self.nunchuckDebuff = 0
+        self.scaredOfCockroach = 0
+        self.burnDamage = 0
         foeAttackMethods = {'alien commander': self.actAsAlienCommander,
                             'idol': self.actAsIdol,
                             'alien protector': self.actAsAlienProtector,
@@ -68,6 +76,13 @@ class foe:
         self.cooldown = 3
         self.standardAttack = self.attack
         self.lastPtAttackMethodUsed = 1
+        self.recentSummonQty = 0
+        self.durationUntilRecentSummonQtyReset = 0
+        self.controlledByPro = controlledByPro
+        self.hitsUntilStunnedByBaton = 1
+        self.turnsOfBleedingFromGun = 0
+        self.bleedingDamageFromGun = 0
+        self.isDrone = 0
 
         try:
             self.attackMethod = foeAttackMethods[name]
@@ -84,8 +99,53 @@ class foe:
         if loot is not None:
             self.loot = loot
 
-    def basicAttack(self, target, number, enemies):
-        if self.stun <= 0:
+    def handleRecentSummonQty(self):
+        self.durationUntilRecentSummonQtyReset -= 1
+
+        if self.durationUntilRecentSummonQtyReset <= 0:
+            self.durationUntilRecentSummonQtyReset = 5
+            self.recentSummonQty = 0
+
+    def basicAttack(self, target, number, enemies, player):
+        if self.controlledByPro and [enemy for enemy in enemies if not enemy.possessed and
+                                                                   enemy.hp > 0] and self.stun <= 0:
+            targetId = input(f"Enter the id number of the foe you want {self.getPrintName()} to attack or "
+                             "'r' to attack a random foe:")
+            target = getTarget(enemies, targetId)
+
+            try:
+                if self.strengthened:
+                    damageTaken = getReducedDamage(self.attack, target) * 2
+
+                else:
+                    damageTaken = getReducedDamage(self.attack, target)
+
+                if target.type == 'alien commander' and [enemy for enemy in enemies if
+                                                         enemy.type == 'alien protector']:
+                    printWithPause(f'{self.getPrintName()} hit {target.getPrintName()}, but they were immune.')
+
+                elif target.type in ['alien priest', 'sun priest'] and [enemy for enemy in enemies if
+                                                                        enemy.type == 'alien worshipper' and
+                                                                        enemy.hp > 0 and enemy.possessed ==
+                                                                        target.possessed]:
+                    attackedFoe = random.choice([enemy for enemy in enemies if
+                                                 enemy.type == 'alien worshipper'
+                                                 and enemy.hp > 0 and enemy.possessed ==
+                                                 target.possessed])
+                    attackedFoe.hp = 0
+                    printWithPause(f"{attackedFoe.getPrintName()} got in the way of {self.getPrintName()}'s attack.")
+
+                else:
+                    printWithPause(f'{self.getPrintName()} attacked {target.getPrintName()}, '
+                                   f'inflicting {damageTaken} damage.')
+                    target.hp -= damageTaken
+
+                self.gunWeakness = 0
+
+            except AttributeError:
+                pass
+
+        elif self.stun <= 0:
             if self.strengthened:
                 target.hp -= 5
 
@@ -98,54 +158,93 @@ class foe:
                         printWithPause(f'{self.getPrintName()} hit {target.getPrintName()}, '
                                        f'inflicting 5 damage.')
 
-                    else:
-                        printWithPause(f'You were hit by {self.getPrintName()}, inflicting '
-                                       f'5 damage.')
+                    elif not self.scaredOfCockroach:
+                        if target.isDrone:
+                            printWithPause(f'Your drone was hit by {self.getPrintName()}, '
+                                           f'inflicting 5 damage.')
+
+                        else:
+                            printWithPause(f'You were hit by {self.getPrintName()}, inflicting '
+                                           f'5 damage.')
+
+                        if 'hissing cockroach' in target.inventory:
+                            self.scaredOfCockroach = 1
+                            printWithPause(f'Your cockroach hissed at {self.getPrintName()}, scaring them.')
 
             if random.randint(0, 1):
-                if self.strengthened:
-                    damageTaken = getReducedDamage(self.attack, target) * 2
+                damageTaken = None
 
-                else:
-                    damageTaken = getReducedDamage(self.attack, target)
-
-                if target.blocking and not self.type == 'alien gangster':
-                    printWithPause(f'{self.getPrintName()} attacked you, inflicting '
-                                   f'{damageTaken} damage, causing them to bleed.')
-                    self.bleedingDamage = greater(self.bleedingDamage, 3)
-
-                elif target.foe:
-                    printWithPause(f'{self.getPrintName()} attacked {target.getPrintName()}, '
-                                   f'inflicting {damageTaken} damage.')
-
-                elif self.type == 'alien gangster':
-                    if target.blocking:
-                        damageTaken *= 4
-                        printWithPause(f'{self.getPrintName()} shot you with their gun, '
-                                       f'inflicting {damageTaken} damage. '
-                                       f'You failed to block the shot.')
-
-                    elif self.nunchuckDebuff:
-                        damageTaken *= 2
-                        printWithPause(f'{self.getPrintName()} shot you with their gun, '
-                                       f'inflicting {damageTaken} damage. '
-                                       f'You failed to hit the shot with your nunchucks.')
+                if target.foe or not self.scaredOfCockroach:
+                    if self.strengthened:
+                        damageTaken = getReducedDamage(self.attack, target) * 2
 
                     else:
+                        damageTaken = getReducedDamage(self.attack, target)
+
+                if target.foe:
+                    if target.type in ['alien priest', 'sun priest'] and [enemy for enemy in enemies if
+                                                                          enemy.type == 'alien worshipper']:
+                        target = random.choice([enemy for enemy in enemies if
+                                                enemy.type == 'alien worshipper'])
+                        printWithPause(f"{target.getPrintName()} blocked {self.getPrintName()}'s attack.")
+
+                    else:
+                        printWithPause(f'{self.getPrintName()} attacked {target.getPrintName()}, '
+                                       f'inflicting {damageTaken} damage.')
+
+                elif not self.scaredOfCockroach:
+                    if self.type == 'alien gangster':
+                        if target.blocking:
+                            damageTaken *= 4
+                            printWithPause(f'{self.getPrintName()} shot you with their gun, '
+                                           f'inflicting {damageTaken} damage. '
+                                           f'You failed to block the shot.')
+
+                        elif self.nunchuckDebuff:
+                            if target.isDrone:
+                                printWithPause(f'{self.getPrintName()} hit your drone, inflicting '
+                                               f'{damageTaken} damage.')
+
+                            else:
+                                damageTaken *= 2
+                                printWithPause(f'{self.getPrintName()} shot you with their gun, '
+                                               f'inflicting {damageTaken} damage. '
+                                               f'You failed to hit the shot with your nunchucks.')
+
+                        else:
+                            if target.isDrone:
+                                printWithPause(f'{self.getPrintName()} attacked your drone, '
+                                               f'inflicting {damageTaken} damage.')
+
+                            else:
+                                printWithPause(f'{self.getPrintName()} attacked you, inflicting '
+                                               f'{damageTaken} damage.')
+
+                    elif not target.isDrone and target.blocking:
+                        printWithPause(f'{self.getPrintName()} attacked you, inflicting '
+                                       f'{damageTaken} damage, causing them to bleed.')
+                        self.bleedingDamage = greater(self.bleedingDamage, 3)
+
+                    elif not target.isDrone:
                         printWithPause(f'{self.getPrintName()} attacked you, inflicting '
                                        f'{damageTaken} damage.')
 
-                else:
-                    printWithPause(f'{self.getPrintName()} attacked you, inflicting '
-                                   f'{damageTaken} damage.')
+                        if self.nunchuckDebuff:
+                            self.hp -= damageTaken * 4
+                            printWithPause(f"{self.getPrintName()}'s attack hit your nunchucks, inflicting "
+                                           f"{damageTaken * 4} damage to the foe.")
 
-                    if self.nunchuckDebuff:
-                        self.hp -= damageTaken * 4
-                        print(f"{self.getPrintName()}'s attack hit your nunchucks, inflicting "
-                              f"{damageTaken * 4} damage to the foe.")
+                    else:
+                        printWithPause(f'{self.getPrintName()} attacked your drone, '
+                                       f'inflicting {damageTaken} damage.')
 
-                target.hp -= damageTaken
-                self.gunWeakness = 0
+                    if 'hissing cockroach' in player.inventory:
+                        printWithPause(f'Your cockroach hissed at {self.getPrintName()}, scaring them.')
+                        self.scaredOfCockroach = 1
+
+                if damageTaken is not None:
+                    target.hp -= damageTaken
+                    self.gunWeakness = 0
 
             elif not self.strengthened:
                 self.gunWeakness = 1
@@ -157,19 +256,177 @@ class foe:
 
         self.nunchuckDebuff = 0
 
-    def actAsAlienCommander(self, target, number, enemies):
-        if not self.stun:
-            if self.hp <= 67 and percentChance(33):
-                self.newFoes.append(foe('alien attacker', number))
-                number += 1
-                printWithPause(f'{self.getPrintName()} summoned alien attacker {number - 1} '
-                               f'to attack you.')
+        if self.scaredOfCockroach > 0:
+            self.scaredOfCockroach -= 0.5
 
-            if percentChance(33):
-                self.newFoes.append(foe('drone', number))
-                printWithPause(f'{self.getPrintName()} summoned drone {number} '
-                               f'to attack you.')
+    def getHurtByDebuffs(self, protagonist):
+        if self.stun and not self.poisonDamage and 'gas canister' in protagonist.inventory:
+            self.poisonDamage = 3
+            printWithPause(f'{self.getPrintName()} is poisoned from your gas canister.')
+
+        if self.bleedingDamage:
+            self.hp -= self.bleedingDamage
+            printWithPause(f'{self.getPrintName()} took {self.bleedingDamage} damage '
+                           f'from bleeding.')
+
+            if 'vial of diseased blood' in protagonist.inventory:
+                self.hp -= 3
+                printWithPause(f'{self.getPrintName()} took 3 damage from the disease in their blood.')
+
+        if self.bleedingDamageFromGun:
+            self.hp -= self.bleedingDamageFromGun
+            printWithPause(f'{self.getPrintName()} took {self.bleedingDamageFromGun} damage '
+                           f'from bleeding from their gunshot wound.')
+
+            if 'vial of diseased blood' in protagonist.inventory and not self.bleedingDamage:
+                self.hp -= 3
+                printWithPause(f'{self.getPrintName()} took 3 damage from the disease in their blood.')
+
+            self.turnsOfBleedingFromGun -= 1
+
+            if self.turnsOfBleedingFromGun <= 0:
+                self.bleedingDamageFromGun = 0
+
+        if self.poisonDamage:
+            self.hp -= self.poisonDamage
+            printWithPause(f'{self.getPrintName()} took {self.poisonDamage} damage '
+                           f'from poison.')
+
+        if self.controlledByPro:
+            self.hp -= 5
+            printWithPause(f'{self.getPrintName()} lost 5 hp.')
+
+        if self.burnDamage:
+            self.hp -= self.burnDamage
+            printWithPause(f'{self.getPrintName()} took {self.burnDamage} from burning.')
+
+    def actAsIdol(self, target, number, enemies, player):
+        target.hp -= 5
+        self.gunWeakness = 0
+
+        if self.possessed:
+            printWithPause(f"{target.getPrintName()} is hurt by an idol's presence, "
+                           f"inflicting 5 damage.")
+
+        else:
+            printWithPause(f"You are hurt by an idol's presence, inflicting 5 damage.")
+
+        if self.stun:
+            printWithPause(f'{self.getPrintName()} cannot be stunned.')
+
+    def actAsAlienProtector(self, target, number, enemies, player):
+        printWithPause(f'{self.getPrintName()} is protecting the commander.')
+
+    def empowerEnemyAsScientist(self, enemies):
+        try:
+            if self.possessed:
+                foeWeakened = random.choice([enemy for enemy in enemies if
+                                             not enemy.possessed])
+                foeWeakened.standardAttack /= 2
+                printWithPause(f'{self.getPrintName()} is weakening '
+                               f'{foeWeakened.getPrintName()}.')
+
+            else:
+                foeStrengthened = random.choice([enemy for enemy in enemies if not
+                enemy.strengthened and not enemy.possessed])
+                foeStrengthened.strengthened = 1
+                printWithPause(f'{self.getPrintName()} is empowering '
+                               f'{foeStrengthened.getPrintName()}.')
+
+        except IndexError:
+            if self.possessed:
+                self.strengthened = 1
+                printWithPause(f'{self.getPrintName()} is empowering '
+                               f'{self.getPrintName()}.')
+
+    def actAsAlienScientist(self, target, number, enemies, player):
+        if not self.stun and percentChance(33):
+            self.empowerEnemyAsScientist(enemies)
+
+        self.basicAttack(target, number, enemies, player)
+
+    def actAsAlienCombatScientist(self, target, number, enemies, player):
+        if not self.stun:
+            self.empowerEnemyAsScientist(enemies)
+
+        self.basicAttack(target, number, enemies, player)
+
+    def actAsAlienGeneral(self, target, number, enemies, player):
+        otherFoes = [enemy for enemy in enemies if not enemy.possessed]
+
+        if ((not self.possessed or len(otherFoes) > 1) and (not self.stun and percentChance(33)) and
+                self.recentSummonQty < 4):
+            self.newFoes.append(foe('drone', number, scanned=self.scanned,
+                                    possessed=self.possessed))
+            printWithPause(f'{self.getPrintName()} summoned {self.newFoes[-1].getPrintName()}.')
+            self.recentSummonQty += 1
+
+        self.basicAttack(target, number, enemies, player)
+        self.handleRecentSummonQty()
+
+    def actAsAlienAssassin(self, target, number, enemies, player):
+        if not self.stun:
+            if not self.preparingGrenade and percentChance(50):
+                self.preparingGrenade = 1
+                printWithPause(f'{self.getPrintName()} is preparing a stun grenade.')
+
+            elif self.preparingGrenade:
+                if not self.possessed:
+                    self.preparingGrenade = 0
+                    player.stun = 1
+                    printWithPause('You were hit by a stun grenade. You are now stunned.')
+
+                else:
+                    printWithPause(f'A stun grenade was thrown, stunning all enemies in '
+                                   f'the room that you are in.')
+
+                    for enemy in enemies:
+                        enemy.stun = 2
+                        printWithPause(f'{enemy.getPrintName()} was stunned for 2 turns '
+                                       f'by the stun grenade.')
+
+        self.basicAttack(target, number, enemies, player)
+
+    def actAsAlienDoctor(self, target, number, enemies, player):
+        if not self.stun:
+            if percentChance(50):
+                for enemy in enemies:
+                    if enemy.type in ['alien warrior', 'sun priest']:
+                        enemy.hp += 3
+                        printWithPause(f'{self.getPrintName()} regenerated 3 hp of '
+                                       f'{enemy.getPrintName()}.')
+                        break
+
+    def actAsAlienPriest(self, target, number, enemies, player):
+        if not self.stun:
+            if (percentChance(33) and len([enemy for enemy in enemies if
+                                           enemy.type == 'alien worshipper']) <= 1 and
+                    self.recentSummonQty < 3):
+                self.newFoes.append(foe('alien worshipper', number, scanned=1))
                 number += 1
+                printWithPause(f'{self.getPrintName()} summoned '
+                               f'{self.newFoes[-1].getPrintName()}.')
+                self.recentSummonQty += 1
+
+        self.basicAttack(target, number, enemies, player)
+        self.handleRecentSummonQty()
+
+    def actAsAlienCommander(self, target, number, enemies, player):
+        if not self.stun:
+            if self.recentSummonQty < 7:
+                if self.hp <= 67 and percentChance(33):
+                    self.newFoes.append(foe('alien attacker', number))
+                    number += 1
+                    printWithPause(f'{self.getPrintName()} summoned alien attacker {number - 1} '
+                                   f'to attack you.')
+                    self.recentSummonQty += 1
+
+                if percentChance(33):
+                    self.newFoes.append(foe('drone', number))
+                    printWithPause(f'{self.getPrintName()} summoned drone {number} '
+                                   f'to attack you.')
+                    number += 1
+                    self.recentSummonQty += 1
 
         if self.hp <= 133 and self.timesSummoned == 0:
             self.newFoes.append(foe('alien protector', number))
@@ -196,133 +453,20 @@ class foe:
                 printWithPause(f"{self.getPrintName()}'s bleeding has stopped.")
                 self.bleedingDamage = 0
 
-        self.basicAttack(target, number, enemies)
+        self.basicAttack(target, number, enemies, player)
+        self.handleRecentSummonQty()
 
-    def getHurtByDebuffs(self):
-        if self.bleedingDamage:
-            self.hp -= self.bleedingDamage
-            printWithPause(f'{self.getPrintName()} took {self.bleedingDamage} damage '
-                           f'from bleeding.')
-            
-        if self.poisonDamage:
-            self.hp -= self.poisonDamage
-            printWithPause(f'{self.getPrintName()} took {self.poisonDamage} damage '
-                           f'from poison.')
-            
-    def actAsIdol(self, target, number, enemies):
-        target.hp -= 5
-        self.gunWeakness = 0
-
-        if self.possessed:
-            printWithPause(f"{target.getPrintName()} is hurt by an idol's presence, "
-                           f"inflicting 5 damage.")
-
-        else:
-            printWithPause(f"You are hurt by an idol's presence, inflicting 5 damage.")
-
-        if self.stun:
-            printWithPause(f'{self.getPrintName()} cannot be stunned.')
-
-    def actAsAlienProtector(self, target, number, enemies):
-        printWithPause(f'{self.getPrintName()} is protecting the commander.')
-
-    def empowerEnemyAsScientist(self, enemies):
-        try:
-            if self.possessed:
-                foeWeakened = random.choice([enemy for enemy in enemies if
-                                             not enemy.possessed])
-                foeWeakened.standardAttack /= 2
-                printWithPause(f'{self.getPrintName()} is weakening '
-                               f'{foeWeakened.getPrintName()}.')
-
-            else:
-                foeStrengthened = random.choice([enemy for enemy in enemies if not
-                                                 enemy.strengthened and not enemy.possessed])
-                foeStrengthened.strengthened = 1
-                printWithPause(f'{self.getPrintName()} is empowering '
-                               f'{foeStrengthened.getPrintName()}.')
-
-        except IndexError:
-            if self.possessed:
-                self.strengthened = 1
-                printWithPause(f'{self.getPrintName()} is empowering '
-                               f'{self.getPrintName()}.')
-        
-    def actAsAlienScientist(self, target, number, enemies):
-        if not self.stun and percentChance(33):
-            self.empowerEnemyAsScientist(enemies)
-
-        self.basicAttack(target, number, enemies)
-
-    def actAsAlienCombatScientist(self, target, number, enemies):
+    def actAsAlienPilot(self, target, number, enemies, player):
         if not self.stun:
-            self.empowerEnemyAsScientist(enemies)
-
-        self.basicAttack(target, number, enemies)
-
-    def actAsAlienGeneral(self, target, number, enemies):
-        otherFoes = [enemy for enemy in enemies if not enemy.possessed]
-
-        if (not self.possessed or len(otherFoes) > 1) and (not self.stun and percentChance(33)):
-            self.newFoes.append(foe('drone', number, scanned=self.scanned,
-                                    possessed=self.possessed))
-            printWithPause(f'{self.getPrintName()} summoned {self.newFoes[-1].getPrintName()}.')
-
-        self.basicAttack(target, number, enemies)
-
-    def actAsAlienAssassin(self, target, number, enemies):
-        if not self.stun:
-            if not self.preparingGrenade and percentChance(50):
-                self.preparingGrenade = 1
-                printWithPause(f'{self.getPrintName()} is preparing a stun grenade.')
-
-            elif self.preparingGrenade:
-                if not self.possessed:
-                    self.preparingGrenade = 0
-                    target.stun = 1
-                    printWithPause('You were hit by a stun grenade. You are now stunned.')
-
-                else:
-                    printWithPause(f'A stun grenade was thrown, stunning all enemies in '
-                                   f'the room that you are in.')
-
-                    for enemy in enemies:
-                        enemy.stun = 2
-                        printWithPause(f'{enemy.getPrintName()} was stunned for 2 turns '
-                                       f'by the stun grenade.')
-
-        self.basicAttack(target, number, enemies)
-
-    def actAsAlienDoctor(self, target, number, enemies):
-        if not self.stun:
-            if percentChance(50):
-                for enemy in enemies:
-                    if enemy.type in ['alien warrior', 'sun priest']:
-                        enemy.hp += 3
-                        printWithPause(f'{self.getPrintName()} regenerated 3 hp of '
-                                       f'{enemy.getPrintName()}.')
-                        break
-
-    def actAsAlienPriest(self, target, number, enemies):
-        if not self.stun:
-            if percentChance(33) and len([enemy for enemy in enemies if
-                                          enemy.type == 'alien worshipper']) <= 1:
-                self.newFoes.append(foe('alien worshipper', number, scanned=1))
-                number += 1
-                printWithPause(f'{self.getPrintName()} summoned '
-                               f'{self.newFoes[-1].getPrintName()}.')
-
-        self.basicAttack(target, number, enemies)
-
-    def actAsAlienPilot(self, target, number, enemies):
-        if not self.stun:
-            if (self.hp > 125 and percentChance(25)) or (self.hp <= 125 and percentChance(50)):
+            if ((self.hp > 125 and percentChance(25)) or (self.hp <= 125 and percentChance(50))
+                    and self.recentSummonQty < 2):
                 foeChoices = ['alien assassin', 'alien minion', 'alien scientist',
                               'alien general', 'alien henchman']
                 self.newFoes.append(foe(random.choice(foeChoices), number,
                                         scanned=self.scanned, givesPotions=0))
                 printWithPause(f'{self.getPrintName()} summoned {self.newFoes[-1].getPrintName()}.')
                 number += 1
+                self.recentSummonQty += 1
 
             if ((self.hp <= 375 and self.timesSummoned == 0) or (self.hp <= 250
                                                                  and self.timesSummoned <= 1)):
@@ -350,9 +494,10 @@ class foe:
                 if list(enemy.loot.keys())[0] in ['sword', 'armor']:
                     enemy.loot = {}
 
-        self.basicAttack(target, number, enemies)
+        self.basicAttack(target, number, enemies, player)
+        self.handleRecentSummonQty()
 
-    def actAsAlienWarrior(self, target, number, enemies):
+    def actAsAlienWarrior(self, target, number, enemies, player):
         if not self.stun:
             self.cooldown -= 1
 
@@ -401,36 +546,41 @@ class foe:
 
                     self.nextAttack = 'summon'
 
-        self.basicAttack(target, number, enemies)
+        self.basicAttack(target, number, enemies, player)
 
-    def actAsSunPriestPt1(self, target, number, enemies):
+    def actAsSunPriestPt1(self, target, number, enemies, player):
         if not self.stun:
-            if percentChance(25):
-                self.newFoes.append(foe('alien priest', number, scanned=self.scanned))
-                printWithPause(f'{self.getPrintName()} summoned {self.newFoes[-1].getPrintName()}.')
-                number += 1
-
-            elif percentChance(50):
-                self.newFoes.append(foe('alien cultist', number, scanned=self.scanned))
-                printWithPause(f'{self.getPrintName()} summoned {self.newFoes[-1].getPrintName()}.')
-                number += 1
+            if self.recentSummonQty < 1:
+                if percentChance(25):
+                    self.newFoes.append(foe(random.choice(['alien gangster', 'alien cultist']),
+                                            number, scanned=1))
+                    printWithPause(f'{self.getPrintName()} summoned {self.newFoes[-1].getPrintName()}.')
+                    number += 1
+                    self.newFoes.append(foe(random.choice(['alien nun', 'alien priest']),
+                                            number, scanned=1))
+                    printWithPause(f'{self.getPrintName()} summoned {self.newFoes[-1].getPrintName()}.')
+                    number += 1
+                    self.recentSummonQty += 1
 
             if self.hp <= 2900 and self.timesSummoned == 0:
-                self.newFoes.append(foe('alien cultist', number, scanned=self.scanned))
+                self.newFoes.append(foe('alien gangster', number, scanned=1))
                 printWithPause(f'{self.getPrintName()} summoned {self.newFoes[-1].getPrintName()}.')
                 number += 1
+                self.timesSummoned = 1
 
             elif self.hp <= 2800 and self.timesSummoned <= 1:
-                self.newFoes.append(foe('alien cultist', number, scanned=self.scanned))
+                self.newFoes.append(foe('alien nun', number, scanned=1))
                 printWithPause(f'{self.getPrintName()} summoned {self.newFoes[-1].getPrintName()}.')
                 number += 1
-                self.newFoes.append(foe('alien gangster', number, scanned=self.scanned))
+                self.newFoes.append(foe('alien gangster', number, scanned=1))
                 printWithPause(f'{self.getPrintName()} summoned {self.newFoes[-1].getPrintName()}.')
                 number += 1
+                self.timesSummoned = 2
 
-        self.basicAttack(target, number, enemies)
+        self.basicAttack(target, number, enemies, player)
+        self.handleRecentSummonQty()
 
-    def actAsSunPriestPt2(self, target, number, enemies):
+    def actAsSunPriestPt2(self, target, number, enemies, player):
         if self.lastPtAttackMethodUsed == 1:
             self.lastPtAttackMethodUsed = 2
             self.timesSummoned = 0
@@ -454,30 +604,37 @@ class foe:
             elif self.cooldown < 1:
 
                 if self.nextAttack == 'summon':
+                    foeChoices = (['alien gangster'] * 4 + ['alien cultist'] * 2 +
+                                  ['alien worshipper'] * 3 + ['alien combat scientist'])
+
                     for i in range(3):
-                        nextFoe = random.choice(['alien gangster', 'alien cultist',
-                                                 'alien worshipper', 'alien combat scientist'])
-                        self.newFoes.append(foe(nextFoe, number, scanned=self.scanned))
+                        nextFoe = random.choice(foeChoices)
+                        foeChoices.remove(nextFoe)
+                        self.newFoes.append(foe(nextFoe, number, scanned=1))
                         printWithPause(f'{self.getPrintName()} summoned {self.newFoes[-1].getPrintName()}.')
                         number += 1
 
                     self.nextAttack = 'regen'
-                    self.cooldown = 4
+                    self.cooldown = 5
 
                 elif self.nextAttack == 'regen':
                     for i in range(5):
                         self.newFoes.append(foe('alien doctor', number,
-                                                scanned=self.scanned))
+                                                scanned=1))
                         printWithPause(f'{self.getPrintName()} summoned '
                                        f'{self.newFoes[-1].getPrintName()}.')
                         number += 1
 
-                    for i in range(2):
-                        self.newFoes.append(foe('alien cultist', number,
-                                                scanned=self.scanned))
-                        printWithPause(f'{self.getPrintName()} summoned '
-                                       f'{self.newFoes[-1].getPrintName()}.')
-                        number += 1
+                    self.newFoes.append(foe('alien cultist', number,
+                                            scanned=1))
+                    printWithPause(f'{self.getPrintName()} summoned '
+                                   f'{self.newFoes[-1].getPrintName()}.')
+                    number += 1
+                    self.newFoes.append(foe(random.choice(['alien gangster', 'alien cultist']),
+                                            number, scanned=1))
+                    number += 1
+                    printWithPause(f'{self.getPrintName()} summoned '
+                                   f'{self.newFoes[-1].getPrintName()}.')
 
                     self.nextAttack = 'explosion'
                     self.cooldown = 5
@@ -487,6 +644,10 @@ class foe:
                     target.hp -= damageToPro
                     printWithPause(f'You were hit by an explosion, inflicting {damageToPro} damage.')
 
+                    if 'drone' in player.inventory:
+                        printWithPause('Your drone was hit by an explosion, inflicting 40 damage.')
+                        player.drone.hp -= 40
+
                     for enemy in enemies:
                         enemy.hp -= 40
                         printWithPause(f'{enemy.getPrintName()} was hit by an explosion, '
@@ -495,20 +656,14 @@ class foe:
                     self.nextAttack = 'summon'
                     self.cooldown = 2
 
-            target.hp -= self.attack
-            printWithPause(f"You were hit by {self.getPrintName()}, inflicting {self.attack} "
-                           f"damage.")
+            self.basicAttack(target, number, enemies, player)
 
-        else:
-            self.stun -= 1
-            printWithPause(f'{self.getPrintName()} is stunned.')
-
-    def actAsSunPriest(self, target, number, enemies):
+    def actAsSunPriest(self, target, number, enemies, player):
         if self.hp > 2700:
-            self.actAsSunPriestPt1(target, number, enemies)
+            self.actAsSunPriestPt2(target, number, enemies, player)
 
         else:
-            self.actAsSunPriestPt1(target, number, enemies)
+            self.actAsSunPriestPt2(target, number, enemies, player)
 
     def getDamage(self, enemies):
         if self.type == 'alien cultist':
@@ -524,15 +679,26 @@ class foe:
     def handleStunImmunity(self):
         if self.type in list(bossesPerLevel.values()) and self.stun:
             self.stun = 0
-            print(f'{self.getPrintName()} is immune to stun.')
+            printWithPause(f'{self.getPrintName()} is immune to stun.')
 
     def getPrintName(self):
         return self.fullName if self.scanned else '???'
 
-    def actAsFoe(self, target, number, enemies):
+    def actAsFoe(self, target, number, enemies, protagonist):
         self.getDamage(enemies)
 
         if self.hp > 0:
-            self.attackMethod(target, number, enemies)
+            self.attackMethod(target, number, enemies, protagonist)
 
-        self.getHurtByDebuffs()
+        self.getHurtByDebuffs(protagonist)
+
+    def getUpdate(self):
+        pass
+
+    def beHitByBaton(self):
+        self.hitsUntilStunnedByBaton -= 1
+
+        if self.hitsUntilStunnedByBaton <= 0:
+            self.stun += 2
+            self.hitsUntilStunnedByBaton = 5
+            printWithPause(f'{self.getPrintName()} was stunned by your baton.')

@@ -7,3 +7,4 @@ foesPerLevel = {1: ['alien colonist', 'alien bodyguard', 'alien police', 'alien 
 bossesPerLevel = {1: 'alien commander', 2: 'alien pilot', 3: 'alien warrior'}
 oneTimeUseItems = ['solution', 'stun grenade', 'throwing knife', 'vial of poison', 'serrated knife',
                    'combustible lemon']
+textColors = [f'\033[3{i}m' for i in range(1, 8)]

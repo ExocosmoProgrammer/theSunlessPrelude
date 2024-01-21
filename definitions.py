@@ -3,21 +3,62 @@ import random
 import pickle
 import pygame
 
+from variables import textColors
+
 
 def lesser(a, b):
+    """Returns the smaller value of the arguments that are put in."""
     return a if a < b else b
 
 
 def greater(a, b):
+    """Returns the larger value of the arguments that are put in."""
     return a if a > b else b
 
 
-def printWithPause(message, pause=0.5):
-    print(message)
+def printWithPause(pause=0.5, *args):
+    """printWithPause(X, Y) prints X and pauses the game for Y seconds if possible."""
+    text = f''
+
+    for arg in args:
+        text += f'{arg} '
+
+    print(text)
+    # print(message)
     time.sleep(pause)
 
 
+def getInput(*args):
+    text = ''
+
+    for arg in args:
+        text += arg
+
+    return input(text)
+
+
+def printInRainbowWithPause(pause, message):
+    """printInRainbowWithPause(X, Y) prints X in alternating colors and pauses the game for Y seconds if possible."""
+    characters = []
+    text = ''
+    colorNumber = 0
+
+    for i in message:
+        characters.append(textColors[colorNumber])
+        characters.append(i)
+        colorNumber += 1
+
+        if colorNumber >= len(textColors):
+            colorNumber = 0
+
+    for i in characters:
+        text += i
+
+    printWithPause(pause, text)
+
 def percentChance(percent):
+    """percentChance(X) has an X% chance to return true if X is an integer and 0 <= X <= 100."""
+
     if random.randint(1, 100) <= percent:
         return True
 
@@ -26,17 +67,18 @@ def percentChance(percent):
 
 
 def getReducedDamage(damage, target):
+    """getReducedDamage(X, Y) returns how much damage Y should take from something would inflict X damage to
+    a target without damage reduction."""
     return damage * (1 - target.damageReduction / 100)
 
 
-def getTarget(enemies, response, fromAlly=True):
+def getTarget(enemies, response):
+    """getTarget(X, Y) tries to return  a random foe if Y is 'r'. For Y != 'r', getTarget(X, Y) tries to return a foe
+    with an id number such that a string containing the id number would be equivalent to Y."""
+
     try:
         if response == 'r':
-            if fromAlly:
-                priorityFoes = [enemy for enemy in enemies if not enemy.possessed]
-
-            else:
-                priorityFoes = [enemy for enemy in enemies if enemy.possessed]
+            priorityFoes = [enemy for enemy in enemies if not enemy.possessed]
 
             if priorityFoes:
                 response = random.choice(priorityFoes).number
@@ -53,6 +95,8 @@ def getTarget(enemies, response, fromAlly=True):
 
 
 def getListOfThingsWithCommas(conjunction, messages, ending='', beginning=''):
+    """Adds commas, a conjunction, a beginning, and an end to a list of phrases as appropriate."""
+
     if len(messages) > 2:
         for i in range(len(messages) - 1):
             messages[i] += ', '
@@ -79,6 +123,8 @@ def getListOfThingsWithCommas(conjunction, messages, ending='', beginning=''):
 
 
 def saveWithPickle(data, file):
+    """saveWithPickle(X, Y) saves X to Y if possible."""
+
     try:
         with open(file, 'xb') as saveData:
             pickle.dump(data, saveData)
@@ -89,11 +135,14 @@ def saveWithPickle(data, file):
 
 
 def loadWithPickle(file):
+    """loadWithPickle(X) returns whatever is in X if X is the name of a file that can be loaded by pickle."""
+
     with open(file, 'rb') as data:
         return pickle.load(data)
 
 
 def play(song):
+    """Plays a song with the file name that is the argument."""
     pygame.mixer.init()
     pygame.mixer.music.load(song)
     pygame.mixer.music.set_volume(1)

@@ -1,7 +1,7 @@
 import random
 
 from definitions import (lesser, printWithPause, getReducedDamage, percentChance, getTarget,
-                         getListOfThingsWithCommas, greater)
+                         getListOfThingsWithCommas, greater, getInput)
 from variables import oneTimeUseItems
 from drone import drone
 

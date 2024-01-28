@@ -586,7 +586,7 @@ class foe:
 
         self.basicAttack(target, number, enemies, player)
         self.handleRecentSummonQty()
-        
+
     def actAsAlienNun(self, target, number, enemies, player):
         if not self.stun:
             self.cooldown -= 1
@@ -613,7 +613,7 @@ class foe:
                                                 f'than you can percieve.')
 
         self.basicAttack(target, number, enemies, player)
-        
+
     def actAsTheSun(self, target, number, enemies, player):
         self.cooldown -= 1
 
@@ -871,18 +871,18 @@ class foe:
                     for i in range(5):
                         self.newFoes.append(foe('alien doctor', number, scanned=1))
                         printWithPause(0.5, '\033[96m', f'{self.fullName} summoned '
-                                       f'{self.newFoes[-1].fullName}.')
+                                                        f'{self.newFoes[-1].fullName}.')
                         number += 1
 
                     self.newFoes.append(foe('alien cultist', number, scanned=1, isSummon=1))
                     printWithPause(0.5, '\033[96m', f'{self.fullName} summoned '
-                                   f'{self.newFoes[-1].fullName}.')
+                                                    f'{self.newFoes[-1].fullName}.')
                     number += 1
                     self.newFoes.append(foe(random.choice(['alien gangster', 'alien cultist']),
                                             number, scanned=1, isSummon=1))
                     number += 1
                     printWithPause(0.5, '\033[96m', f'{self.fullName} summoned '
-                                   f'{self.newFoes[-1].fullName}.')
+                                                    f'{self.newFoes[-1].fullName}.')
 
                     self.nextAttack = 'incendiary'
                     self.cooldown = 5

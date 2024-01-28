@@ -56,8 +56,7 @@ class player:
             printWithPause(0.5, '\033[96m', "One time use items: ", '\033[00m', f"{oneTimeItemInventory}")
 
         if self.souls:
-            printWithPause(0.5, '\033[96m', "Souls: ", '\033[00m', f"{[enemy.fullName for enemy
-                                                                       in self.souls]}")
+            printWithPause(0.5, '\033[96m', "Souls: ", '\033[00m', f"{[enemy.fullName for enemy in self.souls]}")
 
     def heal(self, amount):
         self.hp = lesser(self.hp + amount, self.maxHp)
@@ -311,7 +310,7 @@ class player:
                                                                 'alien cardinal'] \
                                                                 and foe.hp > 0 and foe.possessed ==
                                                                 enemy.possessed]:
-                    attackedFoe = random.choice([foe for foe in enemies if foe.type in ['alien worshipper', 
+                    attackedFoe = random.choice([foe for foe in enemies if foe.type in ['alien worshipper',
                                                                                         'alien cardinal']
                                                  and foe.hp > 0 and foe.possessed ==
                                                  enemy.possessed])

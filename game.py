@@ -4,7 +4,7 @@ import os
 
 from variables import foesPerLevel, bossesPerLevel, oneTimeUseItems
 from definitions import printWithPause, percentChance, greater, saveWithPickle, loadWithPickle, \
-    getListOfThingsWithCommas, printInRainbowWithPause, getInput
+    getListOfThingsWithCommas, printInRainbowWithPause, getInput, lesser, play
 from player import player
 from foe import foe
 
@@ -12,6 +12,9 @@ from foe import foe
 def startGame():
     """The startGame function should initialize the game."""
     global number, room, level, pro, foes, levelFourSpawnCooldown, playerClass, canonCooldown, file, victorious
+    # Once the player dies, the victorious variable is used to tell if the player has won. The number variable
+    # determines what the id number of the next foe should be. If the player is in level 3, the canonCooldown variable
+    # keeps track of when the canon should fire next.
     victorious = 0
     number = 2
     room = 1
@@ -22,12 +25,10 @@ def startGame():
     levelFourSpawnCooldown = 0
     playerClass = None
     canonCooldown = 3
-
     file = 0
 
     while file not in [1, 2, 3, 4]:
         try:
-            print("\033[34m")
             file = int(getInput('\033[96m', 'Choose your file. Type the file number in 1-4:'))
 
         except ValueError:
@@ -43,12 +44,7 @@ def startGame():
 
     elif playerClass == 'soldier':
         pro.maxHp = 100
-        pro.inventory = ['knife', 'shield', 'cross', 'nunchucks', 'sacrificial dagger', 'radio', 'hissing cockroach',
-                         'gas canister', 'vial of diseased blood', 'stun grenade', 'baton', 'gun', 'regen',
-                         'butterfly knife']
-        pro.inventory = ['knife', 'shield', 'armor', 'armor', 'sword', 'sword', 'combustible lemon']
         pro.inventory = ['knife', 'shield']
-        pro.updateStats()
 
     elif playerClass == 'citizen':
         pro.maxHp = 150
@@ -62,6 +58,7 @@ startGame()
 
 
 def addFoes():
+    """Adds foes for when the player goes to a new room that has a number of less than five."""
     global number, room
 
     for i in range(greater(random.randint(room, room + 1), 1)):
@@ -72,6 +69,8 @@ def addFoes():
 
 
 def showRegularRoomSwitchingText():
+    """Shows text upon reaching certain rooms in level three."""
+
     if level == 3:
         if room == 2:
             printWithPause(3, '\033[35m', 'You begin to doubt if you should continue your attack on the'
@@ -85,6 +84,7 @@ def showRegularRoomSwitchingText():
 
 
 def addBoss():
+    """Adds a boss as for levels 1-3."""
     global number, room
     room += 1
     foes.append(foe(bossesPerLevel[level], number))
@@ -110,6 +110,7 @@ def addBoss():
 
 
 def removeFoes():
+    """Handles the procedures for enemies dying."""
     global foes, number, victorious
 
     for enemy in foes:
@@ -119,7 +120,8 @@ def removeFoes():
 
             if 'cross' in pro.inventory and not enemy.possessed and enemy.type not in ['alien commander',
                                                                                        'alien pilot', 'alien warrior',
-                                                                                       'sun priest']:
+                                                                                       'sun priest',
+                                                                                       'helpless sun priest']:
                 if len(pro.souls) < 2:
                     if getInput('\033[96m', f"Will you take {enemy.getPrintName()}'s soul? y/n:") == 'y':
                         enemy.hp = enemy.initialHp / 2
@@ -133,6 +135,8 @@ def removeFoes():
                         pro.hp -= enemy.hp
                         enemy.bleedingDamage = 0
                         enemy.poisonDamage = 0
+                        enemy.burnDamage = 0
+                        enemy.bleedingDamageFromGun = 0
                         enemy.stun = 0
                         getRidOfFoe = 0
 
@@ -144,32 +148,34 @@ def removeFoes():
                     printWithPause(0.5,'\033[96m', "You cannot hold another soul.")
 
             if getRidOfFoe:
-                printWithPause(0.5, '\033[33m', f'{enemy.getPrintName()} is dead.')
+                if enemy.type not in ['sun priest', 'helpless sun priest']:
+                    printWithPause(0.5, '\033[33m', f'{enemy.getPrintName()} is dead.')
 
-                if level == 4:
-                    pro.enemiesKilledInLevelFour += 1
+                    if level == 4:
+                        pro.enemiesKilledInLevelFour += 1
 
-                for key in enemy.loot.keys():
-                    if percentChance(enemy.loot[key]):
-                        if key not in oneTimeUseItems or pro.inventory.count(key) < 2:
-                            pro.inventory.append(key)
-                            printWithPause(0.5, '\033[35m', f'You got {key}.')
+                    for key in enemy.loot.keys():
+                        if percentChance(enemy.loot[key]):
+                            if key not in oneTimeUseItems or pro.inventory.count(key) < 2:
+                                pro.inventory.append(key)
+                                printWithPause(0.5, '\033[35m', f'You got {key}.')
 
-                        elif 'drone' in pro.inventory and pro.drone.inventory.count(key) == 0:
-                            printWithPause(0.5, '\033[96m', f'You found {key}. You could '
-                                           f'not pick it up, but your drone did. ')
-                            pro.drone.inventory.append(key)
+                            elif 'drone' in pro.inventory and pro.drone.inventory.count(key) == 0:
+                                printWithPause(0.5, '\033[96m', f'You found {key}. You could '
+                                               f'not pick it up, but your drone did. ')
+                                pro.drone.inventory.append(key)
 
-                        elif 'drone' in pro.inventory:
-                            printWithPause(0.5, '\033[96m', f'You found {key}, but neither '
-                                                            f'you nor your drone could pick the {key} up.')
+                            elif 'drone' in pro.inventory:
+                                printWithPause(0.5, '\033[96m', f'You found {key}, but neither '
+                                                                f'you nor your drone could pick the {key} up.')
 
-                        else:
-                            printWithPause(0.5, '\033[96m', f'You found {key}. You could not pick it up.')
+                            else:
+                                printWithPause(0.5, '\033[96m', f'You found {key}. You '
+                                                                f'could not pick it up.')
 
-                if enemy.givesPotions and percentChance(25):
-                    pro.potions += 1
-                    printWithPause(0.5, '\033[96m', 'You acquired a potion.')
+                    if enemy.givesPotions and percentChance(25):
+                        pro.potions += 1
+                        printWithPause(0.5, '\033[96m', 'You acquired a potion.')
 
             if enemy.type == 'alien commander':
                 foes = []
@@ -195,10 +201,9 @@ def removeFoes():
                 pro.potions += 5
                 number = 1
                 printWithPause(0.5, '\033[96m', 'You got 5 potions.')
-                printWithPause(7, '\033[96m', "Before you can finish killing the pilot, he disables "
-                               "the ship's controls and alerts other pilots that "
-                               "the ship is being taken over.")
-                printWithPause(4, '\033[96m', 'The pilot is dead now.')
+                printWithPause(7, '\033[96m', "Before you finished killing the pilot, he disabled "
+                               "the ship's controls and alerted other pilots that "
+                               "the ship was being taken over.")
                 printWithPause(4, '\033[96m', "The ship's controls must be re-enabled from "
                                "another room.")
                 printWithPause(4, '\033[96m', 'Make your way to the room to gain control of your '
@@ -231,6 +236,18 @@ def removeFoes():
                 break
 
             elif enemy.type == 'sun priest':
+                hp = pro.hp
+                pro.hp = lesser(random.randint(1, 10), pro.hp)
+                printWithPause(5, '\033[31m', f'The sun priest hit you, inflicting {hp - pro.hp} damage.')
+                printWithPause(5, '\033[35m', 'He has collapsed. He is helpless.')
+                printWithPause(5, '\033[35m', 'He is begging for your mercy and promising to bring '
+                                              'peace if you spare his life')
+                foes = [foe('helpless sun priest',
+                            1, scanned=1)]
+                pro.bleedingDamage = pro.burningDamage = pro.poisonDamage = 0
+                break
+
+            elif enemy.type == 'helpless sun priest':
                 while getInput('\033[96m', 'Will you proceed? y/n:') != 'y':
                     pass
 
@@ -253,6 +270,7 @@ def removeFoes():
 
 
 def handleCanon():
+    """Causes the canon to fire in level three as appropriate."""
     global canonCooldown
 
     if level == 3 and room < 5:
@@ -280,19 +298,17 @@ def handleCanon():
 
 
 def addSummons():
+    """Adds foes that other foes summon to the list of foes, adjusts the number variable, and resets each foe's list
+    of new foes."""
     global foes, number
-
-    for enemy in foes:
-        for alien in enemy.newFoes:
-            alien.scanned = enemy.scanned
-            alien.givesPotions = 0
-
-        foes += enemy.newFoes
-        number += len(enemy.newFoes)
-        enemy.newFoes = []
+    foes += enemy.newFoes
+    number += len(enemy.newFoes)
+    enemy.newFoes = []
 
 
 def handleLevelFourSpawning():
+    """Causes enemies to appear in level four as needed."""
+
     if level == 4 and not pro.sunPriestSpawned:
         global levelFourSpawnCooldown, number
 
@@ -333,6 +349,7 @@ def handleLevelFourSpawning():
 
 
 def handleLevelFourBossSpawn():
+    """Makes the sun priest appear as needed."""
     global foes, number
     pro.sunPriestSpawned = 1
     foes = [foe('sun priest', number, scanned=1)]
@@ -343,12 +360,15 @@ def handleLevelFourBossSpawn():
 
 
 def saveGame():
+    """Saves the game."""
     saveWithPickle(pro, f'playerSave{file}.pickle')
     variousData = {'level': level, 'room': room, 'foes': foes, 'number': number, 'canonCooldown': canonCooldown}
     saveWithPickle(variousData, f'variousData{file}.pickle')
 
 
 def loadGame():
+    """Tries to load the player's file."""
+
     try:
         global pro, level, room, foes, number, canonCooldown
         pro = loadWithPickle(f'playerSave{file}.pickle')
@@ -367,6 +387,7 @@ def loadGame():
 
 
 def handleDeath():
+    """Handles the procedure for exiting the game or starting another game upon the player's death. 😭"""
     global number, room, foes, level
     proceed = False
     actions = ["'e' to exit the game", "'1' to start at level 1"]
@@ -384,12 +405,7 @@ def handleDeath():
     if pro.hasReachedLevelFour:
         actions.append("'4' to start at level 4")
 
-    if len(actions) >= 3:
-        options = getListOfThingsWithCommas('or', actions, ':', 'Type ')
-
-    else:
-        options = "Type 'e' to exit the game or '1' to start at level 1:"
-
+    options = getListOfThingsWithCommas('or', actions, ':', 'Type ')
     number = 1
     foes = []
     room = 0
@@ -424,6 +440,7 @@ def handleDeath():
 
 
 def getCustomInput():
+    """Gets player input until 'y' is entered in. Tries to execute each response from the getCustomInput function."""
     action = getInput('\033[96m', "What will you do? Type 'y' to exit the terminal for custom inputs:")
 
     if action != 'y':
@@ -437,6 +454,8 @@ def getCustomInput():
 
 
 def getLootForRetry(initialLevel):
+    """Gives the player items based on what level the player starts a game in."""
+
     if initialLevel > 1:
         for i in range(1, initialLevel):
             foesForLoot = [foe(random.choice(foesPerLevel[i]), 1) for j in range(8)]
@@ -473,6 +492,11 @@ while True:
                 addFoes()
                 showRegularRoomSwitchingText()
 
+                if level == 3:
+                    canonCooldown = room + 2
+                    printWithPause(0.5, '\033[96m', f'The canon must readjust its aim. You will be '
+                                                    f'shot by a canon in {canonCooldown} turns.')
+
             elif room == 4:
                 addBoss()
 
@@ -480,11 +504,6 @@ while True:
                 level += 1
                 room = 0
                 addFoes()
-
-            if level == 3:
-                canonCooldown = room + 2
-                printWithPause(0.5, '\033[96m', f'The canon must readjust its aim. You will be shot by a '
-                               f'canon in {canonCooldown} turns.')
 
             removeFoes()
 
@@ -494,17 +513,16 @@ while True:
         else:
             removeFoes()
             possessedFoes = [adversary for adversary in foes if adversary.possessed]
+            targetList = [[pro]]
+
+            if possessedFoes:
+                targetList.append(possessedFoes)
+
+            if 'drone' in pro.inventory:
+                targetList.append([pro.drone])
 
             for enemy in foes:
                 if not enemy.possessed:
-                    targetList = [[pro]]
-
-                    if possessedFoes:
-                        targetList.append(possessedFoes)
-
-                    if 'drone' in pro.inventory:
-                        targetList.append([pro.drone])
-
                     enemy.actAsFoe(random.choice(random.choice(targetList)), number, foes, pro)
 
                 else:
@@ -520,6 +538,8 @@ while True:
             handleCanon()
             removeFoes()
             handleLevelFourSpawning()
+
+    play('music/levelFourDeathThemeRight.mp3')
 
     if level == 1:
         printWithPause(5, '\033[31m', 'You died. The alien troops will destroy the world.')

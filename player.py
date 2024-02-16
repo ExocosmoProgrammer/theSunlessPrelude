@@ -1,5 +1,4 @@
 import random
-import os
 
 from definitions import (lesser, printWithPause, getReducedDamage, percentChance, getTarget,
                          getListOfThingsWithCommas, greater, getInput)
@@ -43,6 +42,7 @@ class player:
             exec(f'self.{key} = extra[key]')
 
     def showHp(self):
+        """Displays the player's hp and inventory."""
         hpDashCount = int(self.hp / 10)
         emptySpaceCount = int(self.maxHp / 10 - hpDashCount)
         upgradeInventory = [item for item in self.inventory if item not in oneTimeUseItems]
@@ -56,23 +56,38 @@ class player:
             printWithPause(0.5, '\033[96m', "One time use items: ", '\033[00m', f"{oneTimeItemInventory}")
 
         if self.souls:
-            printWithPause(0.5, '\033[96m', "Souls: ", '\033[00m', f"{[enemy.fullName for enemy in self.souls]}")
+            printWithPause(0.5, '\033[96m', "Souls: ", '\033[00m', f"{[enemy.fullName for enemy
+                                                                       in self.souls]}")
 
     def heal(self, amount):
+        """self.heal(x) heals self by x hit points and then reduces self.hp to self.maxHp if
+        self.hp exceeds the self.maxHp."""
         self.hp = lesser(self.hp + amount, self.maxHp)
 
     def getRegen(self):
+        """Regenerates the player's hp from the 'regen' item each turn as needed."""
+
         for i in range(self.inventory.count('regen')):
             oldHp = self.hp
             self.heal(3)
             printWithPause(0.5, '\033[96m', f'You regained {self.hp - oldHp} hit points.')
 
     def basicAttack(self, enemies):
+        """self.basicAttack(self, enemies) makes self perform  basic attack."""
+
+        if 'sacrificial dagger' in self.inventory and self.attack == self.standardAttack and not \
+                [enemy for enemy in enemies if enemy.type == 'helpless sun priest'] \
+                and getInput('\033[96m', "Will you use your sacrificial dagger? y/n:") == 'y':
+            self.useSacrificialDagger()
+            self.updateStats()
+
         if enemies:
             targetId = getInput('\033[96m', "Enter the id number of the foe you want to attack or "
                                             "'r' to attack a random foe:")
 
             enemy = getTarget(enemies, targetId)
+            # If your input on who to attack is invalid, then targetId will be equal to none and the code in the next
+            # try loop will raise Attribute Error.
 
             try:
                 if enemy.type in ['alien priest', 'sun priest', 'alien bishop'] and [foe for foe in enemies if
@@ -105,6 +120,8 @@ class player:
                                                         f'attack, inflicting {damageInflicted} damage.')
 
                     enemy.hp -= damageInflicted
+                    # enemy.twirlingNunchucks is 1 if the enemy is a nun or mother superior that is using its ability
+                    # of twirling nunchucks else 0.
 
                     if enemy.twirlingNunchucks:
                         self.hp -= self.attack
@@ -148,6 +165,7 @@ class player:
             printWithPause(0.5, '\033[96m', 'You are in an empty room.')
 
     def scan(self, enemies):
+        """self.scan(enemies) makes the player scan."""
         print('')
         printWithPause(0.5, '\033[96m', 'The enemies in your room are:')
 
@@ -164,9 +182,12 @@ class player:
         print('')
 
     def knifeAttack(self, enemies):
+        """Makes the player perform two attacks with their knife."""
         targetId = getInput('\033[96m', "Enter the id number of the foe you want to stab with "
                                         "your knife or 'r' to stab a random foe:")
         enemy = getTarget(enemies, targetId)
+        # If your input on who to attack is invalid, then targetId will be equal to none and the code in the try
+        # loop will raise Attribute Error.
 
         try:
             if enemy.type in ['alien priest', 'sun priest', 'alien bishop'] and [foe for foe in enemies if
@@ -203,10 +224,14 @@ class player:
             pass
 
     def butterflyKnifeAttack(self, enemies):
+        """Makes the player perform two attacks with their butterfly knife."""
+
         for i in range(2):
             targetId = getInput('\033[96m', "Enter the id number of a foe you want to slash with "
                                             "your butterfly knife or 'r' to slash a random foe:")
             enemy = getTarget(enemies, targetId)
+            # If your input on who to attack is invalid, then targetId will be equal to none and the code in the try
+            # loop will raise Attribute Error.
 
             try:
                 if enemy.type in ['alien priest', 'sun priest', 'alien bishop'] and [foe for foe in enemies if
@@ -227,14 +252,14 @@ class player:
                                                     f'were immune.')
 
                 else:
-                    damageInflicted = getReducedDamage(self.attack / 2, enemy)
+                    damageInflicted = getReducedDamage(self.attack * 3 / 8, enemy)
                     printWithPause(0.5, '\033[93m', f'You slashed {enemy.getPrintName()} '
                                                     f'with your butterfly knife, inflicting '
                                                     f'{damageInflicted} damage.')
                     enemy.hp -= damageInflicted
 
                     if enemy.twirlingNunchucks:
-                        self.hp -= self.attack / 2
+                        self.hp -= self.attack * 3 / 8
                         printWithPause(0.5, '\033[31m', f'{enemy.getPrintName()} deflected your slash '
                                                         f'with their nunchucks, inflicting {damageInflicted} damage '
                                                         f'to you.')
@@ -243,9 +268,12 @@ class player:
                 pass
 
     def useNunchucks(self, enemies):
+        """Makes the player attack with their nunchucks."""
         targetId = getInput('\033[96m', "Enter the id number of the foe you want to hit with your nunchucks "
                                         "or 'r' to hit a random foe.")
         enemy = getTarget(enemies, targetId)
+        # If your input on who to attack is invalid, then targetId will be equal to none and the code in the try
+        # loop will raise Attribute Error.
 
         try:
             if enemy.type in ['alien priest', 'sun priest', 'alien bishop'] and [foe for foe in enemies if
@@ -280,10 +308,14 @@ class player:
             pass
 
     def useSolution(self, enemies):
+        """Makes the player use a solution."""
+
         if 'solution' in self.inventory:
             targetId = getInput('\033[96m', 'Enter the id number of the foe you want to throw your solution at '
                                             "or 'r' to target a random foe:")
             enemy = getTarget(enemies, targetId)
+            # If your input on who to attack is invalid, then targetId will be equal to none and the code in the try
+            # loop will raise Attribute Error.
 
             try:
                 if enemy.type == 'alien nun' and enemy.twirlingNunchucks:
@@ -310,7 +342,7 @@ class player:
                                                                 'alien cardinal'] \
                                                                 and foe.hp > 0 and foe.possessed ==
                                                                 enemy.possessed]:
-                    attackedFoe = random.choice([foe for foe in enemies if foe.type in ['alien worshipper',
+                    attackedFoe = random.choice([foe for foe in enemies if foe.type in ['alien worshipper', 
                                                                                         'alien cardinal']
                                                  and foe.hp > 0 and foe.possessed ==
                                                  enemy.possessed])
@@ -331,6 +363,10 @@ class player:
             printWithPause(0.5, '\033[96m', 'You do not have a solution.')
 
     def useThrowingKnife(self, enemies):
+        """Makes the player use a throwing knife."""
+        # If your input on who to attack is invalid, then targetId will be equal to none and the code in the try
+        # loop will raise Attribute Error.
+
         if 'throwing knife' in self.inventory:
             targetId = getInput('\033[96m', 'Enter the id number of the foe you want to throw your knife '
                                             "at or 'r' to target a random foe:")
@@ -372,6 +408,8 @@ class player:
             printWithPause(0.5, '\033[96m', 'You do not have a throwing knife.')
 
     def useStunGrenade(self, enemies):
+        """Makes the player use a stun grenade."""
+
         if 'stun grenade' in self.inventory:
             for enemy in [enemy for enemy in enemies if not enemy.possessed]:
                 enemy.stun = 2
@@ -384,10 +422,14 @@ class player:
             printWithPause(0.5, '\033[96m', 'You do not have a stun grenade.')
 
     def useVialOfPoison(self, enemies):
+        """Makes the player use a vial of poison."""
+
         if 'vial of poison' in self.inventory:
             targetId = getInput('\033[96m', 'Enter the id number of the foe you want to throw your vial '
                                             "at or 'r' to target a random foe:")
             enemy = getTarget(enemies, targetId)
+            # If your input on who to attack is invalid, then targetId will be equal to none and the code in the try
+            # loop will raise Attribute Error.
 
             try:
                 if enemy.type == 'alien nun' and enemy.twirlingNunchucks:
@@ -422,6 +464,10 @@ class player:
             printWithPause(0.5, '\033[96m', 'You do not have a vial of poison.')
 
     def useSerratedKnife(self, enemies):
+        """Makes the player use a serrated knife."""
+        # If your input on who to attack is invalid, then targetId will be equal to none and the code in the try
+        # loop will raise Attribute Error.
+
         if 'serrated knife' in self.inventory:
             targetId = getInput('\033[96m', 'Enter the id number of the foe you want to throw your '
                                             "serrated knife at or 'r' to target a random foe:")
@@ -463,10 +509,14 @@ class player:
             printWithPause(0.5, '\033[96m', 'You do not have a serrated knife.')
 
     def useCombustibleLemon(self, enemies):
+        """Makes the player use a combustible lemon."""
+
         if 'combustible lemon' in self.inventory:
             targetId = getInput('\033[96m', 'Enter the id number of the foe you want to throw your combustible '
                                             "lemon at or 'r' to target a random foe:")
             enemy = getTarget(enemies, targetId)
+            # If your input on who to attack is invalid, then targetId will be equal to none and the code in the try
+            # loop will raise Attribute Error.
 
             try:
                 if enemy.type == 'alien nun' and enemy.twirlingNunchucks:
@@ -508,6 +558,8 @@ class player:
             printWithPause(0.5, '\033[96m', 'You do not have a combustible lemon.')
 
     def useOneTimeUseItem(self, enemies):
+        """Gets the player's input on what one time use item to use and tries to use the requested type of one
+        time use item."""
         print('')
         printWithPause(0.5, '\033[96m', 'Your one time use items are:')
 
@@ -537,6 +589,8 @@ class player:
             self.useCombustibleLemon(enemies)
 
     def usePotion(self):
+        """Makes the player use a potion."""
+
         if self.potions > 0:
             oldHp = self.hp
             self.heal(50)
@@ -548,17 +602,18 @@ class player:
             printWithPause(0.5, '\033[96m', 'You do not have a potion.')
 
     def updateStats(self):
+        """Properly adjusts the player's attack, temporary attack duration, and maximum hp."""
         self.standardAttack = 10 + self.inventory.count('sword') * 5
         self.maxHp = self.initialHp + self.inventory.count('armor') * 15
         self.attack = self.temporaryAttack + self.standardAttack
+        self.temporaryAttackDuration -= 1
 
         if self.temporaryAttackDuration <= 0:
             self.temporaryAttack = 0
 
-        else:
-            self.temporaryAttackDuration -= 1
-
     def releaseSoul(self):
+        """Gets player input on what soul to release and tries to release the soul that the player says to release."""
+
         try:
             soulId = getInput('\033[96m', "Type the id of the soul you want to release:")
             soul = [enemy for enemy in self.souls if enemy.number == int(soulId)][0]
@@ -570,17 +625,26 @@ class player:
             pass
 
     def useSacrificialDagger(self):
-        hpSacrificed = int(getInput('\033[96m', 'How much hp will you turn into extra temporary attack:'))
+        """Makes the player use their sacrificial dagger."""
 
-        if hpSacrificed > 0:
-            printWithPause(0.5, '\033[31m', f'You got {hpSacrificed} extra temporary attack and '
-                                            f'lost {hpSacrificed} hp.')
-            self.temporaryAttackDuration = 3
-            self.temporaryAttack = hpSacrificed
-            self.hp -= hpSacrificed
+        try:
+            hpSacrificed = int(getInput('\033[96m', 'How much hp will you turn into extra temporary attack:'))
+
+            if hpSacrificed > 0:
+                printWithPause(0.5, '\033[31m', f'You got {hpSacrificed} extra temporary attack and '
+                                                f'lost {hpSacrificed} hp.')
+                self.temporaryAttackDuration = 2
+                self.temporaryAttack = hpSacrificed
+                self.hp -= hpSacrificed
+
+        except ValueError:
+            pass
 
     def getCustomInput(self):
+        """Gets player input until 'y' is entered in. Tries to execute each response from the getCustomInput method."""
         action = getInput('\033[96m', "What will you do? Type 'y' to exit the terminal for custom inputs:")
+        # self.getCustomInput() is only called in the self.actions method. If self.getCustomInput returns 1, then
+        # self.actions will return 1, causing the getCustomInput function to be called in the game file.
 
         if action == 'other':
             return 1
@@ -597,6 +661,7 @@ class player:
         return 0
 
     def actions(self, enemies, level):
+        """Handles all of the player's actions."""
         self.blocking = 0
         self.damageReduction = 0
 
@@ -610,10 +675,6 @@ class player:
             printWithPause(0.5, '\033[96m', 'You are stunned.')
 
         else:
-            if 'sacrificial dagger' in self.inventory and self.temporaryAttackDuration <= 0 \
-                    and getInput('\033[96m', "Will you use your sacrificial dagger? y/n:") == 'y':
-                self.useSacrificialDagger()
-
             self.updateStats()
             actionList = ["Type 'a' to perform a basic attack", "'s' to scan"]
 
@@ -639,47 +700,71 @@ class player:
 
             action = getInput('\033[96m', getListOfThingsWithCommas('or', actionList, ':'))
 
-            if action == 'a':
-                self.basicAttack(enemies)
+            if not [enemy for enemy in enemies if enemy.type == 'helpless sun priest']:
+                if action == 'a':
+                    self.basicAttack(enemies)
 
-            elif action == 's':
-                self.scan(enemies)
+                elif action == 's':
+                    self.scan(enemies)
 
-            elif action == 'h':
-                self.usePotion()
+                elif action == 'h':
+                    self.usePotion()
 
-            elif action == 'b' and 'shield' in self.inventory:
-                self.blocking = 1
-                self.damageReduction = 75
+                elif action == 'b' and 'shield' in self.inventory:
+                    self.blocking = 1
+                    self.damageReduction = 75
 
-            elif action == 'c' and [item for item in self.inventory if item in oneTimeUseItems]:
-                self.useOneTimeUseItem(enemies)
+                elif action == 'c' and [item for item in self.inventory if item in oneTimeUseItems]:
+                    self.useOneTimeUseItem(enemies)
 
-            elif action == 'n' and 'nunchucks' in self.inventory:
-                self.useNunchucks(enemies)
+                elif action == 'n' and 'nunchucks' in self.inventory:
+                    self.useNunchucks(enemies)
 
-            elif action == 'r' and self.souls:
-                self.releaseSoul()
+                elif action == 'r' and self.souls:
+                    self.releaseSoul()
 
-            elif action == 'y' and (not [enemy for enemy in enemies if not enemy.possessed]
-                                    and level < 4 or self.enemiesKilledInLevelFour >= 15):
-                return 1
+                elif action == 'y' and (not [enemy for enemy in enemies if not enemy.possessed]
+                                        and level < 4 or self.enemiesKilledInLevelFour >= 15):
+                    return 1
 
-            elif action == 'other' and self.getCustomInput():
-                return 'terminal'
+                elif action == 'other' and self.getCustomInput():
+                    return 'terminal'
 
-            for i in range(self.inventory.count('knife')):
-                if [enemy for enemy in enemies if enemy.hp > 0 and not enemy.possessed]:
-                    self.knifeAttack(enemies)
+                for i in range(self.inventory.count('knife')):
+                    if [enemy for enemy in enemies if enemy.hp > 0 and not enemy.possessed]:
+                        self.knifeAttack(enemies)
 
-            for i in range(self.inventory.count('butterfly knife')):
-                if [enemy for enemy in enemies if enemy.hp > 0 and not enemy.possessed]:
-                    self.butterflyKnifeAttack(enemies)
+                for i in range(self.inventory.count('butterfly knife')):
+                    if [enemy for enemy in enemies if enemy.hp > 0 and not enemy.possessed]:
+                        self.butterflyKnifeAttack(enemies)
 
-            if 'drone' in self.inventory:
-                self.drone.actions(enemies, self)
+                if 'drone' in self.inventory:
+                    self.drone.actions(enemies, self)
+
+            else:
+                enemies[0].hp -= 10
+
+                if enemies[0].hp == 40:
+                    printWithPause(1, '\033[93m', 'You hit the sun priest. You hear something crack.')
+
+                elif enemies[0].hp == 30:
+                    printWithPause(1, '\033[93m', 'You hit the sun priest. Blood stains your fists.')
+
+                elif enemies[0].hp == 20:
+                    printWithPause(1, '\033[93m', 'You hit the sun priest. Its face is disfigured '
+                                                  'and broken.')
+
+                elif enemies[0].hp == 10:
+                    printWithPause(1, '\033[93m', 'You hit the sun priest. Something squelches.')
+
+                elif enemies[0].hp == 0:
+                    printWithPause(1, '\033[93m', 'You hit the sun priest. You hear nothing but '
+                                                  'hollow blows and feel nothing but wet blood.')
 
     def getHurtByDebuffs(self):
+        """Causes debuffs to hurt the player. Causes debuffs to stop hurting the player once the debuffs' durations
+        are over."""
+
         if self.poisonDamage:
             self.hp -= self.poisonDamage
             printWithPause(0.5, '\033[31m', f'You took {self.poisonDamage} damage from poison.')
@@ -700,7 +785,7 @@ class player:
 
         if self.burningDamage:
             self.hp -= self.burningDamage
-            printWithPause(0.5, '\033[31m', f'You took {self.burningDamage} damage from bleeding.')
+            printWithPause(0.5, '\033[31m', f'You took {self.burningDamage} damage from burning.')
 
             if self.turnsOfBurningDamage <= 0:
                 self.burningDamage = 0
@@ -708,12 +793,13 @@ class player:
             self.turnsOfBurningDamage -= 1
 
     def performNecessaryFunctions(self, enemies, level):
+        """Performs all of the player's methods as needed."""
         self.showHp()
         self.getRegen()
         self.getHurtByDebuffs()
         whatToReturn = self.actions(enemies, level)
 
-        if not [enemy for enemy in enemies if enemy.type == 'sun priest']:
+        if not self.sunPriestSpawned:
             if level == 4:
                 self.durationInLevelFour += 1
 

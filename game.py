@@ -539,7 +539,7 @@ while True:
             removeFoes()
             handleLevelFourSpawning()
 
-    play('music/levelFourDeathThemeRight.mp3')
+    play('betterOp28No20Chopin.mp3')
 
     if level == 1:
         printWithPause(5, '\033[31m', 'You died. The alien troops will destroy the world.')

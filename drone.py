@@ -8,8 +8,6 @@ class drone:
     def __init__(self):
         self.inventory = []
         self.attack = 5
-        self.temporaryAttack = 0
-        self.temporaryAttackDuration = 0
         self.hp = 100
         self.foe = 0
         self.damageReduction = 0
@@ -102,13 +100,7 @@ class drone:
     def updateStats(self, protagonist):
         """Updates some stats of the drone"""
         self.hp = greater(self.hp, 0)
-        self.attack = self.temporaryAttack + protagonist.attack / 2
-
-        if self.temporaryAttackDuration <= 0:
-            self.temporaryAttack = 0
-
-        else:
-            self.temporaryAttackDuration -= 1
+        self.attack = protagonist.attack / 2
 
     def giveItemToPro(self, protagnoist):
         """Gets input on what item to give to the player and tries to add said item to the player's inventory and
@@ -119,49 +111,26 @@ class drone:
         for thing in self.inventory:
             print(f'    {thing}')
 
-        print('')
+        printWithPause(0.5, '')
         item = getInput('\033[96m', 'What item will you get from your drone:')
 
         if protagnoist.inventory.count(item) < 2:
             try:
                 self.inventory.remove(item)
                 protagnoist.inventory.append(item)
-                print(f'Your drone gave you {item}.')
+                printWithPause(f'Your drone gave you {item}.')
 
             except ValueError:
-                print(f'Your drone does not have {item}.')
+                printWithPause(f'Your drone does not have {item}.')
 
         else:
-            print(f'You cannot hold another {item}. Your drone keeps the {item}.')
-
-    def useSacrificialDagger(self, protagonist):
-        """Gets input on how much hp to sacrifice from the player. Whatever amount of hp is sacrificed from
-        the player will be temporarily added to the drone's attack."""
-
-        try:
-            hpSacrificed = int(getInput('\033[96m', 'How much of your hp will your drone turn '
-                                                    'into extra temporary attack:'))
-
-            if hpSacrificed > 0:
-                printWithPause(0.5, '\033[31m', f'Your drone got {hpSacrificed} extra temporary attack and '
-                                                f'you lost {hpSacrificed} hp.')
-                self.temporaryAttackDuration = 3
-                self.temporaryAttack = hpSacrificed
-                protagonist.hp -= hpSacrificed
-
-        except ValueError:
-            print('Invalid input')
+            printWithPause(f'You cannot hold another {item}. Your drone keeps the {item}.')
 
     def actions(self, enemies, protagonist):
         """Handles the drone's turn"""
         self.hp = greater(self.hp, 0)
         self.showHp(protagonist)
         self.getHurtByDebuffs()
-
-        if 'sacrificial dagger' in self.inventory and self.temporaryAttackDuration <= 0 < self.hp \
-                and getInput('\033[96m', "Will you use your sacrificial dagger? y/n:") == 'y':
-            self.useSacrificialDagger(protagonist)
-
         self.updateStats(protagonist)
         actionList = ["Press 'h' to make your drone use a potion"]
 
@@ -199,7 +168,7 @@ class drone:
             protagonist.potions -= 1
 
         else:
-            print(f'You do not have a potion.')
+            printWithPause(f'You do not have a potion.')
 
     def showHp(self, protagonist):
         """Shows the drone's hp. Shows the drone's inventory as needed."""
@@ -211,9 +180,12 @@ class drone:
                        '\033[00m', ']')
 
         if self.inventory:
-            print(f'Drone inventory: {self.inventory}')
+            printWithPause(f'Drone inventory: {self.inventory}')
 
     def getHurtByDebuffs(self):
+        """Causes debuffs to hurt the player's drone. Causes debuffs to stop hurting the player's drone once the
+        debuffs' durations are over."""
+
         if self.poisonDamage:
             self.hp -= self.poisonDamage
             printWithPause(0.5, '\033[31m', f'Your drone took {self.poisonDamage} damage from poison.')

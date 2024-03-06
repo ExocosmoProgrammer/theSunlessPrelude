@@ -146,7 +146,7 @@ def play(song):
     """Plays a song with the file name that is the argument."""
     pygame.mixer.init()
     pygame.mixer.music.load(f'music/{song}')
-    pygame.mixer.music.set_volume(0)
+    pygame.mixer.music.set_volume(1)
     pygame.mixer.music.play(-1)
 
 def getRandomItemsFromList(list, qty):

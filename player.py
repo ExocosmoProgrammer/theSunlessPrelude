@@ -1,4 +1,4 @@
-import random
+import random, copy
 
 from definitions import (lesser, printWithPause, getReducedDamage, percentChance, getTarget,
                          getListOfThingsWithCommas, greater, getInput, getRandomItemsFromList)
@@ -40,7 +40,7 @@ class player:
         self.burningDamage = 0
         self.turnsOfBurningDamage = 0
         self.foesEncountered = []
-        self.lockedBoxPuzzles = [self.playTicTacToeAgainstTheSunPriest, self.playMovementPuzzle]
+        self.lockedBoxPuzzles = [self.playTicTacToeAgainstTheSunPriest, self.playGoblinGame, self.playMovementPuzzle]
 
         for key in extra.keys():
             exec(f'self.{key} = extra[key]')
@@ -885,7 +885,7 @@ class player:
                             break
 
                     if hasFireball:
-                        text += '\033[91m  *  \033[97m'
+                        text += '\033[91m  *  \033[97m|'
 
                     elif [i, j] in requiredTiles and [i, j] not in visitedSpaces:
                         text += '\033[93m  o  \033[97m|'
@@ -1251,6 +1251,110 @@ class player:
             if not [item for item in requiredTiles if not item in visitedSpaces]:
                 printWithPause(2, '\033[97m', 'You won.')
                 return 1
+
+    def drawGoblinGame(self, doors):
+        print('')
+
+        for i in range(6):
+            for j in range(2):
+                print('')
+
+    def playGoblinGame(self):
+        print('\033[97m')
+        doors = {}
+
+        class door:
+            def __init__(self, coordinate):
+                self.coordinate = coordinate.copy()
+                self.lastCoordinate = None
+                self.hasGoblin = 0
+                self.strings = ['------ ', '|      ', '|      ', '|      ', '|      ', '| |-|  ']
+
+            def getStrings(self):
+                strings = []
+                movement = [self.coordinate[0] - self.lastCoordinate[0], self.coordinate[1] - self.lastCoordinate[1]]
+
+                if movement[1] > 0:
+                    strings += ['|  |   ', '|  v   ', f'|  {movement[1]}   ']
+
+                if movement[0] > 0:
+                    strings += [f'| -->{movement[0]} ']
+
+                elif movement[0] < 0:
+                    strings += [f'|{-movement[0]}<--  ']
+
+                if movement[1] < 0:
+                    strings += [f'|  {-movement[1]}   ', '|  ^   ', '|  |   ']
+
+                strings = ['-------'] + [f'|{(self.coordinate[0] + 1, self.coordinate[1] + 1)}'] + \
+                          ['|      ' for i in range(4 - len(strings))] + strings + ['| |-|  ']
+                return strings
+
+        def shuffleDoors():
+            shuffledDoors = list(doors.values())
+            random.shuffle(shuffledDoors)
+            returnedDoors = {}
+
+            for i in range(6):
+                for j in range(2):
+                    doorAdded = copy.deepcopy(shuffledDoors[j * 6 + i])
+                    returnedDoors[(i, j)] = doorAdded
+                    doorAdded.lastCoordinate = doorAdded.coordinate.copy()
+                    doorAdded.coordinate = [i, j].copy()
+
+            return returnedDoors
+
+        def drawBoard():
+            for j in range(2):
+                for h in range(7):
+                    text = ''
+
+                    for i in range(6):
+                        text += doors[(i, j)].getStrings()[h]
+
+                    if j > 0 or h > 0:
+                        text += '|'
+
+                    else:
+                        text += '-'
+
+                    print(text)
+
+            print('-------------------------------------------')
+
+        def guessTheDoor():
+            guess = getInput('\033[97m', 'What door will you open? Enter the coordinate:')
+
+            try:
+                guess = eval(guess)
+                guess = (guess[0] - 1, guess[1] - 1)
+
+                if doors[guess].hasGoblin:
+                    printWithPause(0.5, 'You won.')
+                    return 1
+
+            except:
+                pass
+
+            printWithPause(0.5, 'Try again.')
+            return shuffleDoors()
+
+        for i in range(6):
+            for j in range(2):
+                doors[(i, j)] = door([i, j])
+
+        random.choice(list(doors.values())).hasGoblin = 1
+        doors = shuffleDoors()
+        drawBoard()
+
+        while True:
+            x = guessTheDoor()
+            doors = x
+
+            if x == 1:
+                return 1
+
+            drawBoard()
 
     def tryToOpenBox(self):
         if self.lockedBoxPuzzles and self.lockedBoxPuzzles[0]() == 1:

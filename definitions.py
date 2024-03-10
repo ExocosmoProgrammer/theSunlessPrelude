@@ -149,6 +149,7 @@ def play(song):
     pygame.mixer.music.set_volume(1)
     pygame.mixer.music.play(-1)
 
+
 def getRandomItemsFromList(list, qty):
     """Returns qty random items from list without replacement."""
     selection = []

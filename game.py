@@ -137,6 +137,7 @@ def addBoss():
     number += 1
 
     if level == 1:
+        play("commander'sThemePiano.mp3")
         printWithPause(2, '\033[91m', "You found an alien commander.")
         printWithPause(2, '\033[91m', 'Kill the commander.')
 
@@ -597,10 +598,28 @@ loadGame()
 action = None
 
 while action != 'y':
-    action = getInput('\033[96m', "Type 'y' to play or 'b' to view your bestiary:")
+    action = getInput('\033[96m', "Type 'y' to play, 'b' to view your bestiary, 'e' to exit the game, or 's' "
+                                  "to delete a save:")
 
     if action == 'b':
         pro.showBestiary()
+
+    elif action == 'e':
+        sys.exit()
+
+    elif action == 's':
+        fileDeleted = getInput('\033[96m', 'What file will you delete:')
+
+        if getInput('\033[96m', 'Type "delete" to delete your file:') == 'delete':
+            try:
+                os.remove(f'playerSave{fileDeleted}.pickle')
+
+                if fileDeleted == f'{file}':
+                    printWithPause(1, '\033[96m', 'Your file was deleted. Reload the game to continue.')
+                    sys.exit()
+
+            except FileNotFoundError:
+                pass
 
 while True:
     while pro.hp > 0:

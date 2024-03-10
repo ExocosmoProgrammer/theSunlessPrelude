@@ -77,13 +77,13 @@ class movementPuzzleFoe:
                 lastDirection = self.direction.copy()
                 newDirection = [0, 0]
 
-            elif self.availableDirections == [self.reverseLastDirection()]:
-                newDirection = self.reverseLastDirection()
+            elif self.availableDirections == [[-self.direction[0], -self.direction[1]]]:
+                newDirection = [-self.direction[0], -self.direction[1]]
                 lastDirection = self.direction.copy()
 
             else:
                 newDirection = random.choice([direction for direction in self.availableDirections if direction != \
-                                              self.reverseLastDirection()])
+                                              [-self.direction[0], -self.direction[1]]])
 
             lastDirection = self.direction.copy()
             self.direction = newDirection
@@ -91,7 +91,7 @@ class movementPuzzleFoe:
 
         elif len(self.availableDirections) > 2 and percentChance(50):
             newDirection = random.choice([direction for direction in self.availableDirections if direction not in \
-                                          [self.lastDirection, self.direction]])
+                                          [[-self.direction[0], -self.direction[1]], self.direction]])
             lastDirection = self.direction.copy()
             self.direction = newDirection
             self.lastDirection = lastDirection

@@ -1,4 +1,7 @@
-import random, copy
+import random
+import copy
+import sys
+import os
 
 from definitions import (lesser, printWithPause, getReducedDamage, percentChance, getTarget,
                          getListOfThingsWithCommas, greater, getInput, getRandomItemsFromList)
@@ -40,7 +43,10 @@ class player:
         self.burningDamage = 0
         self.turnsOfBurningDamage = 0
         self.foesEncountered = []
-        self.lockedBoxPuzzles = [self.playTicTacToeAgainstTheSunPriest, self.playGoblinGame, self.playMovementPuzzle]
+        self.lockedBoxPuzzles = [self.playTicTacToe, self.playGoblinGame,
+                                 self.playMovementPuzzle]
+        self.playerSpace = [0, 0]
+        self.board = {}
 
         for key in extra.keys():
             exec(f'self.{key} = extra[key]')
@@ -140,7 +146,7 @@ class player:
                     if enemy.gunWeakness and 'gun' in self.inventory:
                         if enemy.type == 'alien commander' and [protector for protector in
                                                                 enemies if protector.type
-                                                                           == 'alien protector']:
+                                                                == 'alien protector']:
                             printWithPause(0.5, '\033[93m', f'You shot {enemy.getPrintName()}, but they '
                                                             f'were immune.')
 
@@ -849,13 +855,13 @@ class player:
         lines = []
 
         for i in ['a', 'b', 'c']:
-            lines.append({f'{i}1': board[f'{i}1'], f'{i}2': board[f'{i}2'], f'{i}3': board[f'{i}3']})
+            lines.append({f'{i}1': self.board[f'{i}1'], f'{i}2': self.board[f'{i}2'], f'{i}3': self.board[f'{i}3']})
 
         for i in range(1, 4):
-            lines.append({f'a{i}': board[f'a{i}'], f'b{i}': board[f'b{i}'], f'c{i}': board[f'c{i}']})
+            lines.append({f'a{i}': self.board[f'a{i}'], f'b{i}': self.board[f'b{i}'], f'c{i}': self.board[f'c{i}']})
 
-        lines.append({'a1': board['a1'], 'b2': board['b2'], 'c3': board['c3']})
-        lines.append({'c1': board['c1'], 'b2': board['b2'], 'a3': board['a3']})
+        lines.append({'a1': self.board['a1'], 'b2': self.board['b2'], 'c3': self.board['c3']})
+        lines.append({'c1': self.board['c1'], 'b2': self.board['b2'], 'a3': self.board['a3']})
         return lines
 
     def showTicTacToeBoard(self, board):
@@ -863,11 +869,11 @@ class player:
         print('\033[97m', '   ------------------')
 
         for i in ['a', 'b', 'c']:
-            print('\033[97m', f'{i} |  {board[f"{i}1"]}  |  {board[f"{i}2"]}  |  '
-                              f'{board[f"{i}3"]}  |')
+            print('\033[97m', f'{i} |  {self.board[f"{i}1"]}  |  {self.board[f"{i}2"]}  |  '
+                              f'{self.board[f"{i}3"]}  |')
             print('\033[97m', '   ------------------')
 
-    def showMovementPuzzleBoard(self, board, visitedSpaces, requiredTiles):
+    def showMovementPuzzle(self, board, visitedSpaces, requiredTiles):
         colorsForTiles = {'     ': '\033[00m', '  i  ': '\033[95m', ' ||| ': '\033[97m', '  !  ': '\033[91m',
                           '  o  ': '\033[93m'}
         print('\033[97m', '-------------------------------------------------------')
@@ -876,10 +882,10 @@ class player:
             text = '|'
 
             for i in range(9):
-                if board[(i, j)] == '     ':
+                if self.board[(i, j)] == '     ':
                     hasFireball = False
 
-                    for enemy in [enemy for enemy in board.values() if type(enemy) == movementPuzzleFoe]:
+                    for enemy in [enemy for enemy in self.board.values() if type(enemy) == movementPuzzleFoe]:
                         if [fireball for fireball in enemy.fireballs if fireball.coordinate == [i, j]]:
                             hasFireball = True
                             break
@@ -893,31 +899,245 @@ class player:
                     else:
                         text += '     \033[97m|'
 
-                elif type(board[(i, j)]) == movementPuzzleFoe:
-                    text += board[(i, j)].__str__() + '\033[97m|'
+                elif type(self.board[(i, j)]) == movementPuzzleFoe:
+                    text += self.board[(i, j)].__str__() + '\033[97m|'
 
                 else:
-                    text += colorsForTiles[board[(i, j)]] + board[(i, j)] + '\033[97m|'
+                    text += colorsForTiles[self.board[(i, j)]] + self.board[(i, j)] + '\033[97m|'
 
             print('\033[97m', text)
             print('\033[97m', '-------------------------------------------------------')
 
-    def playTicTacToeAgainstTheSunPriest(self):
-        board = {}
+    def playMovementPuzzle(self, mode):
+        self.board = {}
+        self.playerSpace = [4, 8]
+        visitedSpaces = [[4, 8]]
+        directionsPerKey = {'w': [0, -1], 'a': [-1, 0], 's': [0, 1], 'd': [1, 0]}
+
+        for i in range(9):
+            for j in range(9):
+                self.board[(i, j)] = '     '
+
+        for i in range(5):
+            for j in range(5):
+                self.board[(2 * j + 1, 2 * i + 1)] = ' ||| '
+
+        for i in range(5):
+            for j in getRandomItemsFromList([h * 2 for h in range(5)], 2):
+                self.board[(j, 2 * i + 1)] = ' ||| '
+
+        for i in [0, 2, 4]:
+            xCoord = random.randint(0, 8)
+            self.board[(xCoord, i)] = movementPuzzleFoe([xCoord, i],
+                                                   random.choice(['mage', 'charging', 'basic']), self.board)
+
+        self.board[(4, 8)] = '  i  '
+        requiredTiles = []
+
+        for i in range(9):
+            requiredTiles.append(random.choice([list(key) for key in self.board.keys() if self.board[key] == '     ' and \
+                                                key[1] == i]))
+
+        def drawBoard():
+            for i in range(200):
+                print(' ')
+
+            colorsForTiles = {'     ': '\033[00m', '  i  ': '\033[95m', ' ||| ': '\033[97m', '  !  ': '\033[91m',
+                              '  o  ': '\033[93m'}
+            print('\033[97m', '-------------------------------------------------------')
+
+            for j in range(9):
+                text = '|'
+
+                for i in range(9):
+                    if self.board[(i, j)] == '     ':
+                        hasFireball = False
+
+                        for enemy in [enemy for enemy in self.board.values() if type(enemy) == movementPuzzleFoe]:
+                            if [fireball for fireball in enemy.fireballs if fireball.coordinate == [i, j]]:
+                                hasFireball = True
+                                break
+
+                        if hasFireball:
+                            text += '\033[91m  *  \033[97m|'
+
+                        elif [i, j] in requiredTiles and [i, j] not in visitedSpaces:
+                            text += '\033[93m  o  \033[97m|'
+
+                        else:
+                            text += '     \033[97m|'
+
+                    elif type(self.board[(i, j)]) == movementPuzzleFoe:
+                        text += self.board[(i, j)].__str__() + '\033[97m|'
+
+                    else:
+                        text += colorsForTiles[self.board[(i, j)]] + self.board[(i, j)] + '\033[97m|'
+
+                print('\033[97m', text)
+                print('\033[97m', '-------------------------------------------------------')
+
+        def enemyTurns():
+            for key in [key for key in self.board.keys() if type(self.board[key]) is movementPuzzleFoe]:
+                enemy = self.board[key]
+                self.board = enemy.action(self.board, self.playerSpace)
+
+                for fireball in enemy.fireballs:
+                    if fireball.move(self.board):
+                        enemy.fireballs.remove(fireball)
+
+                if enemy.coordinate == self.playerSpace or '  i  ' in enemy.tilesSkipped:
+                    printWithPause(2, '\033[97m', 'You lost.')
+                    return 1
+
+                for fireball in enemy.fireballs:
+                    if fireball.coordinate == self.playerSpace:
+                        printWithPause(2, '\033[97m', 'You lost.')
+                        return 1
+
+        def playerTurn():
+            movement = getInput('\033[97m', 'Where will you go? Use wasd:')
+
+            if movement in list(directionsPerKey.keys()):
+                direction = directionsPerKey[movement]
+                newLocation = (self.playerSpace[0] + direction[0], self.playerSpace[1] + direction[1])
+
+                if newLocation in self.board.keys() and self.board[newLocation] != ' ||| ':
+                    for i in [i for i in list(self.board.keys()) if self.board[i] == '  i  ']:
+                        self.board[i] = '     '
+
+                    self.playerSpace = list(newLocation)
+
+                    if self.playerSpace not in visitedSpaces:
+                        visitedSpaces.append(self.playerSpace)
+
+            self.board[tuple(self.playerSpace)] = '  i  '
+
+            if not [item for item in requiredTiles if not item in visitedSpaces]:
+                printWithPause(2, '\033[97m', 'You won.')
+                return 1
+
+        while True:
+            drawBoard()
+
+            if playerTurn():
+                return 1
+
+            if enemyTurns():
+                return 0
+
+    def playTicTacToe(self, mode):
+        mode = 'regular' if mode == 'sun priest' else mode
+        
+        self.board = {}
 
         for i in ['a', 'b', 'c']:
             for j in range(1, 4):
-                board[f'{i}{j}'] = ' '
+                self.board[f'{i}{j}'] = ' '
+                
+        def drawBoard():
+            print('\033[97m', '      1     2     3')
+            print('\033[97m', '   ------------------')
 
-        while True:
-            self.showTicTacToeBoard(board)
+            for i in ['a', 'b', 'c']:
+                print('\033[97m', f'{i} |  {self.board[f"{i}1"]}  |  {self.board[f"{i}2"]}  |  '
+                                  f'{self.board[f"{i}3"]}  |')
+                print('\033[97m', '   ------------------')
+                
+        def handlePlayerTurn():
             spaceTaken = getInput('\033[97m', 'Which available space will you take? '
                                               'Type the name of the row of the space and then the number of the column '
                                               'of the space:')
 
             try:
-                if board[spaceTaken] == ' ':
-                    board[spaceTaken] = 'X'
+                if self.board[spaceTaken] == ' ':
+                    self.board[spaceTaken] = 'X'
+
+                else:
+                    printWithPause(0.5, '\033[97m', 'The space is taken.')
+
+            except KeyError:
+                printWithPause(0.5, '\033[97m', 'The space does not exist.')
+                
+        def getLines():
+            lines = []
+
+            for i in ['a', 'b', 'c']:
+                lines.append({f'{i}1': self.board[f'{i}1'], f'{i}2': self.board[f'{i}2'], f'{i}3': self.board[f'{i}3']})
+
+            for i in range(1, 4):
+                lines.append({f'a{i}': self.board[f'a{i}'], f'b{i}': self.board[f'b{i}'], f'c{i}': self.board[f'c{i}']})
+
+            lines.append({'a1': self.board['a1'], 'b2': self.board['b2'], 'c3': self.board['c3']})
+            lines.append({'c1': self.board['c1'], 'b2': self.board['b2'], 'a3': self.board['a3']})
+            return lines
+        
+        def enemyTurn():
+            try:
+                if mode in ['regular', 'alien pilot']:
+                    almostFinishedOLines = [line for line in lines if \
+                                            list(line.values()).count('O') == 2 and \
+                                            list(line.values()).count(' ')]
+
+                    if mode == 'regular':
+                        almostFinishedXLines = [line for line in lines if \
+                                                list(line.values()).count('X') == 2 and \
+                                                list(line.values()).count(' ')]
+
+                    if almostFinishedOLines:
+                        lineFinished = random.choice(almostFinishedOLines)
+                        emptySpace = [point for point in lineFinished.keys() if self.board[point] == ' '][0]
+
+                    elif mode == 'regular' and almostFinishedXLines:
+                        lineStopped = random.choice(almostFinishedXLines)
+                        emptySpace = [point for point in lineStopped.keys() if self.board[point] == ' '][0]
+
+                    else:
+                        emptySpace = random.choice([key for key in list(self.board.keys()) if self.board[key] == ' '])
+
+                elif mode == 'alien warrior':
+                    emptySpace = random.choice([key for key in list(self.board.keys()) if self.board[key] == ' '])
+
+                else:
+                    emptySpace = random.choice([key for key in list(self.board.keys()) if self.board[key] == ' '])
+
+                self.board[emptySpace] = 'O'
+
+            except IndexError:
+                printWithPause(0.5, '\033[97m', 'you drew')
+                return 2
+
+        while True:
+            drawBoard()
+            handlePlayerTurn()
+            lines = getLines()
+
+            if ['X', 'X', 'X'] in [list(line.values()) for line in lines]:
+                printWithPause(0.5, '\033[97m', 'you won')
+                return 1
+
+            enemyTurn()
+            lines = getLines()
+
+            if ['O', 'O', 'O'] in [list(line.values()) for line in lines]:
+                printWithPause(0.5, '\033[97m', 'you lost')
+                return 0
+        
+    def playTicTacToeAgainstTheSunPriest(self):
+        self.board = {}
+
+        for i in ['a', 'b', 'c']:
+            for j in range(1, 4):
+                self.board[f'{i}{j}'] = ' '
+
+        while True:
+            self.showTicTacToeBoard(self.board)
+            spaceTaken = getInput('\033[97m', 'Which available space will you take? '
+                                              'Type the name of the row of the space and then the number of the column '
+                                              'of the space:')
+
+            try:
+                if self.board[spaceTaken] == ' ':
+                    self.board[spaceTaken] = 'X'
 
                 else:
                     printWithPause(0.5, '\033[97m', 'The space is taken.')
@@ -925,7 +1145,7 @@ class player:
             except KeyError:
                 printWithPause(0.5, '\033[97m', 'The space does not exist.')
 
-            lines = self.getLinesInTicTacToe(board)
+            lines = self.getLinesInTicTacToe(self.board)
 
             if ['X', 'X', 'X'] in [list(line.values()) for line in lines]:
                 printWithPause(0.5, '\033[97m', 'you won')
@@ -941,43 +1161,43 @@ class player:
 
                 if almostFinishedOLines:
                     lineFinished = random.choice(almostFinishedOLines)
-                    emptySpace = [point for point in lineFinished.keys() if board[point] == ' '][0]
+                    emptySpace = [point for point in lineFinished.keys() if self.board[point] == ' '][0]
 
                 elif almostFinishedXLines:
                     lineStopped = random.choice(almostFinishedXLines)
-                    emptySpace = [point for point in lineStopped.keys() if board[point] == ' '][0]
+                    emptySpace = [point for point in lineStopped.keys() if self.board[point] == ' '][0]
 
                 else:
-                    emptySpace = random.choice([key for key in list(board.keys()) if board[key] == ' '])
+                    emptySpace = random.choice([key for key in list(self.board.keys()) if self.board[key] == ' '])
 
-                board[emptySpace] = 'O'
+                self.board[emptySpace] = 'O'
 
             except IndexError:
                 printWithPause(0.5, '\033[97m', 'you drew')
                 return 2
 
-            lines = self.getLinesInTicTacToe(board)
+            lines = self.getLinesInTicTacToe(self.board)
 
             if ['O', 'O', 'O'] in [list(line.values()) for line in lines]:
                 printWithPause(0.5, '\033[97m', 'you lost')
                 return 0
 
     def playTicTacToeAgainstTheAlienWarrior(self):
-        board = {}
+        self.board = {}
 
         for i in ['a', 'b', 'c']:
             for j in range(1, 4):
-                board[f'{i}{j}'] = ' '
+                self.board[f'{i}{j}'] = ' '
 
         while True:
-            self.showTicTacToeBoard(board)
+            self.showTicTacToeBoard(self.board)
             spaceTaken = getInput('\033[97m', 'Which available space will you take? '
                                               'Type the name of the row of the space and then the number of the column '
                                               'of the space:')
 
             try:
-                if board[spaceTaken] == ' ':
-                    board[spaceTaken] = 'X'
+                if self.board[spaceTaken] == ' ':
+                    self.board[spaceTaken] = 'X'
 
                 else:
                     printWithPause(0.5, '\033[97m', 'The space is taken.')
@@ -986,41 +1206,41 @@ class player:
                 printWithPause(0.5, '\033[97m', 'The space does not exist.')
                 return 2
 
-            lines = self.getLinesInTicTacToe(board)
+            lines = self.getLinesInTicTacToe(self.board)
 
             if ['X', 'X', 'X'] in [list(line.values()) for line in lines]:
                 printWithPause(0.5, '\033[97m', 'you won')
                 return 1
 
             try:
-                emptySpace = random.choice([key for key in list(board.keys()) if board[key] == ' '])
-                board[emptySpace] = 'O'
+                emptySpace = random.choice([key for key in list(self.board.keys()) if self.board[key] == ' '])
+                self.board[emptySpace] = 'O'
 
             except IndexError:
                 printWithPause(0.5, '\033[97m', 'you drew')
 
-            lines = self.getLinesInTicTacToe(board)
+            lines = self.getLinesInTicTacToe(self.board)
 
             if ['O', 'O', 'O'] in [list(line.values()) for line in lines]:
                 printWithPause(0.5, '\033[97m', 'you lost')
                 return 0
 
     def playTicTacToeAgainstTheAlienPilot(self):
-        board = {}
+        self.board = {}
 
         for i in ['a', 'b', 'c']:
             for j in range(1, 4):
-                board[f'{i}{j}'] = ' '
+                self.board[f'{i}{j}'] = ' '
 
         while True:
-            self.showTicTacToeBoard(board)
+            self.showTicTacToeBoard(self.board)
             spaceTaken = getInput('\033[97m', 'Which available space will you take? '
                                               'Type the name of the row of the space and then the number of the column '
                                               'of the space:')
 
             try:
-                if board[spaceTaken] == ' ':
-                    board[spaceTaken] = 'X'
+                if self.board[spaceTaken] == ' ':
+                    self.board[spaceTaken] = 'X'
 
                 else:
                     printWithPause(0.5, '\033[97m', 'The space is taken.')
@@ -1028,7 +1248,7 @@ class player:
             except KeyError:
                 printWithPause(0.5, '\033[97m', 'The space does not exist.')
 
-            lines = self.getLinesInTicTacToe(board)
+            lines = self.getLinesInTicTacToe(self.board)
 
             if ['X', 'X', 'X'] in [list(line.values()) for line in lines]:
                 printWithPause(0.5, '\033[97m', 'you won')
@@ -1041,30 +1261,30 @@ class player:
 
                 if almostFinishedOLines:
                     lineFinished = random.choice(almostFinishedOLines)
-                    emptySpace = [point for point in lineFinished.keys() if board[point] == ' '][0]
+                    emptySpace = [point for point in lineFinished.keys() if self.board[point] == ' '][0]
 
                 else:
-                    emptySpace = random.choice([key for key in list(board.keys()) if board[key] == ' '])
+                    emptySpace = random.choice([key for key in list(self.board.keys()) if self.board[key] == ' '])
 
-                board[emptySpace] = 'O'
+                self.board[emptySpace] = 'O'
 
             except IndexError:
                 printWithPause(0.5, '\033[97m', 'you drew')
                 return 2
 
-            lines = self.getLinesInTicTacToe(board)
+            lines = self.getLinesInTicTacToe(self.board)
 
             if ['O', 'O', 'O'] in [list(line.values()) for line in lines]:
                 printWithPause(0.5, '\033[97m', 'you lost')
                 return 0
 
     def playTicTacToeAgainstADrone(self):
-        board = {}
+        self.board = {}
         columnNumbers = {'a': 1, 'b': 2, 'c': 3}
 
         for i in ['a', 'b', 'c']:
             for j in range(1, 4):
-                board[f'{i}{j}'] = ' '
+                self.board[f'{i}{j}'] = ' '
 
         printWithPause(2, '\033[97m', 'You see the drone move aside to reveal...')
         printWithPause(2, '\033[91m', 'The alien commander!')
@@ -1077,27 +1297,27 @@ class player:
                     emptySpace = random.choice(['a1', 'a3', 'c1', 'c3'])
 
                 else:
-                    enemySpots = [tile for tile in list(board.keys()) if board[tile] == 'O']
-                    playerSpots = [tile for tile in list(board.keys()) if board[tile] == 'O']
+                    enemySpots = [tile for tile in list(self.board.keys()) if self.board[tile] == 'O']
+                    playerSpots = [tile for tile in list(self.board.keys()) if self.board[tile] == 'O']
 
 
 
 
-                board[emptySpace] = 'O'
+                self.board[emptySpace] = 'O'
                 turn += 1
 
             except IndexError:
                 printWithPause(0.5, '\033[97m', 'you drew')
                 return 2
 
-            self.showTicTacToeBoard(board)
+            self.showTicTacToeBoard(self.board)
             spaceTaken = getInput('\033[97m', 'Which available space will you take? '
                                               'Type the name of the row of the space and then the number of the column '
                                               'of the space:')
 
             try:
-                if board[spaceTaken] == ' ':
-                    board[spaceTaken] = 'X'
+                if self.board[spaceTaken] == ' ':
+                    self.board[spaceTaken] = 'X'
 
                 else:
                     printWithPause(0.5, '\033[97m', 'The space is taken.')
@@ -1105,34 +1325,34 @@ class player:
             except KeyError:
                 printWithPause(0.5, '\033[97m', 'The space does not exist.')
 
-            lines = self.getLinesInTicTacToe(board)
+            lines = self.getLinesInTicTacToe(self.board)
 
             if ['X', 'X', 'X'] in [list(line.values()) for line in lines]:
                 printWithPause(0.5, '\033[97m', 'you won')
                 return 1
 
-            lines = self.getLinesInTicTacToe(board)
+            lines = self.getLinesInTicTacToe(self.board)
 
             if ['O', 'O', 'O'] in [list(line.values()) for line in lines]:
                 printWithPause(0.5, '\033[97m', 'you lost')
                 return 0
 
     def playTicTacToeAgainstAPlayer(self):
-        board = {}
+        self.board = {}
 
         for i in ['a', 'b', 'c']:
             for j in range(1, 4):
-                board[f'{i}{j}'] = ' '
+                self.board[f'{i}{j}'] = ' '
 
         while True:
-            self.showTicTacToeBoard(board)
+            self.showTicTacToeBoard(self.board)
             spaceTaken = getInput('\033[97m', 'Which available space will player 1 take? '
                                               'Type the name of the row of the space and then the number of the column '
                                               'of the space:')
 
             try:
-                if board[spaceTaken] == ' ':
-                    board[spaceTaken] = 'X'
+                if self.board[spaceTaken] == ' ':
+                    self.board[spaceTaken] = 'X'
 
                 else:
                     printWithPause(0.5, '\033[97m', 'The space is taken.')
@@ -1140,23 +1360,23 @@ class player:
             except KeyError:
                 printWithPause(0.5, '\033[97m', 'The space does not exist.')
 
-            lines = self.getLinesInTicTacToe(board)
+            lines = self.getLinesInTicTacToe(self.board)
 
             if ['X', 'X', 'X'] in [list(line.values()) for line in lines]:
                 printWithPause(0.5, '\033[97m', 'player 1 won')
                 return 1
 
-            if not [list(board.values()).count(' ')]:
+            if not [list(self.board.values()).count(' ')]:
                 printWithPause(0.5, '\033[97m', 'You drew.')
 
-            self.showTicTacToeBoard(board)
+            self.showTicTacToeBoard(self.board)
             spaceTaken = getInput('\033[97m', 'Which available space will player 2 take? '
                                               'Type the name of the row of the space and then the number of the column '
                                               'of the space:')
 
             try:
-                if board[spaceTaken] == ' ':
-                    board[spaceTaken] = 'O'
+                if self.board[spaceTaken] == ' ':
+                    self.board[spaceTaken] = 'O'
 
                 else:
                     printWithPause(0.5, '\033[97m', 'The space is taken.')
@@ -1164,56 +1384,54 @@ class player:
             except KeyError:
                 printWithPause(0.5, '\033[97m', 'The space does not exist.')
 
-            lines = self.getLinesInTicTacToe(board)
+            lines = self.getLinesInTicTacToe(self.board)
 
             if ['O', 'O', 'O'] in [list(line.values()) for line in lines]:
                 printWithPause(0.5, '\033[97m', 'player 2 won')
                 return 0
 
-            if not [list(board.values()).count(' ')]:
+            if not [list(self.board.values()).count(' ')]:
                 printWithPause(0.5, '\033[97m', 'You drew.')
 
-    def playMovementPuzzle(self):
-        board = {}
-        playerSpace = [4, 8]
+    def playMovementPuzzles(self):
+        self.board = {}
+        self.playerSpace = [4, 8]
         visitedSpaces = [[4, 8]]
         directionsPerKey = {'w': [0, -1], 'a': [-1, 0], 's': [0, 1], 'd': [1, 0]}
 
         for i in range(9):
             for j in range(9):
-                board[(i, j)] = '     '
+                self.board[(i, j)] = '     '
 
         for i in range(5):
             for j in range(5):
-                board[(2 * j + 1, 2 * i + 1)] = ' ||| '
+                self.board[(2 * j + 1, 2 * i + 1)] = ' ||| '
 
         for i in range(5):
             for j in getRandomItemsFromList([h * 2 for h in range(5)], 2):
-                board[(j, 2 * i + 1)] = ' ||| '
+                self.board[(j, 2 * i + 1)] = ' ||| '
 
         for i in [0, 2, 4]:
             xCoord = random.randint(0, 8)
-            board[(xCoord, i)] = movementPuzzleFoe([xCoord, i],
-                                                   random.choice(['mage', 'charging', 'basic']), board)
+            self.board[(xCoord, i)] = movementPuzzleFoe([xCoord, i],
+                                                   random.choice(['mage', 'charging', 'basic']), self.board)
 
-        board[(4, 8)] = '  i  '
+        self.board[(4, 8)] = '  i  '
         requiredTiles = []
 
         for i in range(9):
-            requiredTiles.append(random.choice([list(key) for key in board.keys() if board[key] == '     ' and \
+            requiredTiles.append(random.choice([list(key) for key in self.board.keys() if self.board[key] == '     ' and \
                                                   key[1] == i]))
 
-        print(requiredTiles)
-
         while True:
-            self.showMovementPuzzleBoard(board, visitedSpaces, requiredTiles)
+            self.showMovementPuzzle(self.board, visitedSpaces, requiredTiles)
 
-            for key in [key for key in board.keys() if type(board[key]) is movementPuzzleFoe]:
-                enemy = board[key]
-                board = enemy.action(board, playerSpace)
+            for key in [key for key in self.board.keys() if type(self.board[key]) is movementPuzzleFoe]:
+                enemy = self.board[key]
+                self.board = enemy.action(self.board, self.playerSpace)
 
                 for fireball in enemy.fireballs:
-                    if fireball.move(board):
+                    if fireball.move(self.board):
                         enemy.fireballs.remove(fireball)
 
             movement = getInput('\033[97m', 'Where will you go? Use wasd:')
@@ -1223,43 +1441,36 @@ class player:
 
             if movement in list(directionsPerKey.keys()):
                 direction = directionsPerKey[movement]
-                newLocation = (playerSpace[0] + direction[0], playerSpace[1] + direction[1])
+                newLocation = (self.playerSpace[0] + direction[0], self.playerSpace[1] + direction[1])
 
-                if newLocation in board.keys() and board[newLocation] != ' ||| ':
-                    for i in [i for i in list(board.keys()) if board[i] == '  i  ']:
-                        board[i] = '     '
+                if newLocation in self.board.keys() and self.board[newLocation] != ' ||| ':
+                    for i in [i for i in list(self.board.keys()) if self.board[i] == '  i  ']:
+                        self.board[i] = '     '
 
-                    playerSpace = list(newLocation)
+                    self.playerSpace = list(newLocation)
 
-                    if playerSpace not in visitedSpaces:
-                        visitedSpaces.append(playerSpace)
+                    if self.playerSpace not in visitedSpaces:
+                        visitedSpaces.append(self.playerSpace)
 
-            for key in [key for key in board.keys() if type(board[key]) is movementPuzzleFoe]:
-                enemy = board[key]
+            for key in [key for key in self.board.keys() if type(self.board[key]) is movementPuzzleFoe]:
+                enemy = self.board[key]
 
-                if enemy.coordinate == playerSpace or '  i  ' in enemy.tilesSkipped:
+                if enemy.coordinate == self.playerSpace or '  i  ' in enemy.tilesSkipped:
                     printWithPause(2, '\033[97m', 'You lost.')
                     return 0
 
                 for fireball in enemy.fireballs:
-                    if fireball.coordinate == playerSpace:
+                    if fireball.coordinate == self.playerSpace:
                         printWithPause(2, '\033[97m', 'You lost.')
                         return 0
 
-            board[tuple(playerSpace)] = '  i  '
+            self.board[tuple(self.playerSpace)] = '  i  '
 
             if not [item for item in requiredTiles if not item in visitedSpaces]:
                 printWithPause(2, '\033[97m', 'You won.')
                 return 1
 
-    def drawGoblinGame(self, doors):
-        print('')
-
-        for i in range(6):
-            for j in range(2):
-                print('')
-
-    def playGoblinGame(self):
+    def playGoblinGame(self, mode):
         print('\033[97m')
         doors = {}
 
@@ -1287,7 +1498,8 @@ class player:
                     strings += [f'|  {-movement[1]}   ', '|  ^   ', '|  |   ']
 
                 strings = ['-------'] + [f'|{(self.coordinate[0] + 1, self.coordinate[1] + 1)}'] + \
-                          ['|      ' for i in range(4 - len(strings))] + strings + ['| |-|  ']
+                          ['|      ' for i in range(4 - len(strings))] + strings
+                strings += ['|\033[93m |-|  \033[97m'] if mode == 'sun priest' and self.hasGoblin else ['| |-|  ']
                 return strings
 
         def shuffleDoors():
@@ -1320,7 +1532,11 @@ class player:
 
                     print(text)
 
-            print('-------------------------------------------')
+            if mode == 'regular':
+                printWithPause(7, '-------------------------------------------')
+
+            else:
+                print('-------------------------------------------')
 
         def guessTheDoor():
             guess = getInput('\033[97m', 'What door will you open? Enter the coordinate:')
@@ -1343,9 +1559,20 @@ class player:
             for j in range(2):
                 doors[(i, j)] = door([i, j])
 
-        random.choice(list(doors.values())).hasGoblin = 1
-        doors = shuffleDoors()
-        drawBoard()
+        rightDoor = random.choice(list(doors.values()))
+        rightDoor.hasGoblin = 1
+
+        if mode == 'regular':
+            printWithPause(2, f'The goblin is behind the door that has coordinate '
+                              f'{(rightDoor.coordinate[0] + 1, rightDoor.coordinate[1] + 1)}.')
+
+            for i in range(5):
+                doors = shuffleDoors()
+                drawBoard()
+
+        else:
+            doors = shuffleDoors()
+            drawBoard()
 
         while True:
             x = guessTheDoor()
@@ -1357,9 +1584,98 @@ class player:
             drawBoard()
 
     def tryToOpenBox(self):
-        if self.lockedBoxPuzzles and self.lockedBoxPuzzles[0]() == 1:
+        if self.lockedBoxPuzzles and self.lockedBoxPuzzles[0]('regular') == 1:
             self.lockedBoxPuzzles.pop(0)
             printWithPause(1, '\033[96m', 'A lock opened in your box.')
 
             if not self.lockedBoxPuzzles:
                 printWithPause(2, '\033[96m', 'You opened your box.')
+                printWithPause(2, '\033[96m', 'You found 5 potions in your box.')
+                self.potions += 5
+
+    def handlePuzzleMenu(self, file):
+        action = None
+        proceed = 0
+
+        while not proceed:
+            action = getInput('\033[96m', "Type 'e' to exit, 't' to play tic tac toe, 'g' to play the "
+                                          "goblin game, or 'm' to play the movement puzzle.")
+
+            if action == 'e':
+                self.handleTitleScreen(file)
+
+            elif action == 't':
+                action = None
+                modesPerAction = {'1': 'drone', '2': 'alien pilot', '3': 'alien warrior', '4': 'sun priest'}
+
+                while action not in list(modesPerAction.keys()):
+                    modesPerAction = {'1': 'drone', '2': 'alien pilot', '3': 'alien warrior', '4': 'sun priest'}
+                    action = getInput("Who will you face in tic tac toe? Type 'e' to exit,'1' to face a drone, '2' to "
+                                      "face the alien pilot, '3' to face the alien warrior, or '4' to face the sun "
+                                      "priest.")
+
+                    if action == 'e':
+                        self.handlePuzzleMenu(file)
+
+                self.playTicTacToe(modesPerAction[action])
+
+            elif action == 'g':
+                action = None
+                modesPerAction = {'1': 'unknown character', '2': 'alien pilot', '3': 'alien warrior', '4': 'sun priest'}
+
+                while action not in list(modesPerAction.keys()):
+                    modesPerAction = {'1': 'drone', '2': 'alien pilot', '3': 'alien warrior', '4': 'sun priest'}
+                    action = getInput("Who will you face in tic tac toe? Type 'e' to exit,'1' to face an unknown "
+                                      "character, '2' to face the alien pilot, '3' to face the alien warrior, or "
+                                      "'4' to face the sun priest.")
+
+                    if action == 'e':
+                        self.handlePuzzleMenu(file)
+
+                self.playGoblinGame(modesPerAction[action])
+
+            elif action == 'm':
+                action = None
+                modesPerAction = {'1': 'mysterious figure', '2': 'alien pilot', '3': 'alien warrior', '4': 'sun priest'}
+
+                while action not in list(modesPerAction.keys()):
+                    modesPerAction = {'1': 'drone', '2': 'alien pilot', '3': 'alien warrior', '4': 'sun priest'}
+                    action = getInput("Who will you face in tic tac toe? Type 'e' to exit,'1' to face a mysterious "
+                                      "figure, '2' to face the alien pilot, '3' to face the alien warrior, or "
+                                      "'4' to face the sun priest.")
+
+                    if action == 'e':
+                        self.handlePuzzleMenu(file)
+
+                self.playMovementPuzzle(modesPerAction[action])
+
+    def handleTitleScreen(self, file):
+        action = None
+
+        while action != 'y':
+            action = getInput('\033[96m', "Type 'y' to play, 'b' to view your bestiary, 'e' to exit the game, "
+                                          "'s' to delete a save, or 'p' to play a game against an enemy:")
+
+            if action == 'b':
+                self.showBestiary()
+
+            elif action == 'e':
+                sys.exit()
+
+            elif action == 's':
+                fileDeleted = getInput('\033[96m', 'What file will you delete:')
+
+                if getInput('\033[96m', 'Type "delete" to delete your file:') == 'delete':
+                    try:
+                        os.remove(f'playerSave{fileDeleted}.pickle')
+
+                        if fileDeleted == f'{file}':
+                            printWithPause(1, '\033[96m', 'Your file was deleted. Reload the game to '
+                                                          'continue.')
+                            sys.exit()
+
+                    except FileNotFoundError:
+                        pass
+
+            elif action == 'p':
+                self.handlePuzzleMenu(file)

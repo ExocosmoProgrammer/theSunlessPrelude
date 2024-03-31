@@ -218,7 +218,8 @@ textColors = [f'\033[9{i}m' for i in range(1, 8)]
 songsPerLevel = {1: 'The War.mp3', 2: 'The Ship.mp3', 3: 'Doubt.mp3', 4: 'Determination .mp3'}
 initialFoesPerLevel = {1: 1, 2: 1, 3: 3, 4: 0}
 movementPuzzleFoeSprites = {'basic': '  !  ', 'charging': {'w': '  ^  ', 'a': '  <  ', 's': '  v  ', 'd': '  >  '},
-                            'mage': '  8  '}
+                            'mage': '  8  ', 'alien pilot': '  T  ', 'alien warrior': '  #  ', 'sun priest': '  $  ',
+                            'mysterious figure': '  @  ', 'drone': '  O  '}
 
 for foeType in movementPuzzleFoeSprites.keys():
     if type(movementPuzzleFoeSprites[foeType]) is str:

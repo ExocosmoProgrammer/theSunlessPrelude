@@ -4,7 +4,8 @@ import sys
 import os
 
 from definitions import (lesser, printWithPause, getReducedDamage, percentChance, getTarget,
-                         getListOfThingsWithCommas, greater, getInput, getRandomItemsFromList)
+                         getListOfThingsWithCommas, greater, getInput, getRandomItemsFromList, ceiling,
+                         printInRainbowWithPause)
 from variables import (oneTimeUseItems, hpPerFoe, attackPerFoe, lootPerFoe, descriptionPerFoe, combatInfoPerFoe,
                        bestiaryOrder)
 from drone import drone
@@ -47,6 +48,9 @@ class player:
                                  self.playMovementPuzzle]
         self.playerSpace = [0, 0]
         self.board = {}
+        self.experimentalBoard = {}
+        self.warriorFound = False
+        self.highestFootprintNumberFound = 0
 
         for key in extra.keys():
             exec(f'self.{key} = extra[key]')
@@ -91,89 +95,101 @@ class player:
             self.useSacrificialDagger()
             self.updateStats()
 
+        attackType = None
+        damageMultipliers = {'l': 0.4, 'r': 1, 'h': 3}
+
+        while attackType not in ['l', 'r', 'h']:
+            attackType = getInput("\033[96mPress 'l' to perform two light attacks, 'r' to perform a regular attack, or "
+                                  "'h' to perform a heavy attack:")
+
         if enemies:
-            targetId = getInput('\033[96m', "Enter the id number of the foe that you want to attack or "
-                                            "'r' to attack a random foe:")
+            for i in range(2 if attackType == 'l' else 1):
+                targetId = getInput('\033[96m', "Enter the id number of the foe that you want to attack or "
+                                                "'r' to attack a random foe:")
 
-            enemy = getTarget(enemies, targetId)
-            # If your input on who to attack is invalid, then targetId will be equal to none and the code in the next
-            # try loop will raise Attribute Error.
+                enemy = getTarget(enemies, targetId)
+                # If your input on who to attack is invalid, then targetId will be equal to none and
+                # the code in the next try block will raise Attribute Error.
 
-            try:
-                if enemy.type in ['alien priest', 'sun priest', 'alien bishop'] and [foe for foe in enemies if
-                                                                                     foe.type in ['alien worshipper',
-                                                                                                  'alien cardinal']
-                                                                                     and foe.hp > 0 and foe.possessed ==
-                                                                                     enemy.possessed]:
-                    attackedFoe = random.choice([foe for foe in enemies if
-                                                 foe.type in ['alien worshipper', 'alien cardinal']
-                                                 and foe.hp > 0 and foe.possessed ==
-                                                 enemy.possessed])
-                    attackedFoe.hp = 0
-                    printWithPause(0.5, '\033[93m', f'{attackedFoe.getPrintName()} got in the way of '
-                                                    f'your attack.')
+                try:
+                    if enemy.type in ['alien priest', 'sun priest', 'alien bishop'] and [foe for foe in enemies if
+                                                                                         foe.type in ['alien worshipper',
+                                                                                                      'alien cardinal']
+                                                                                         and foe.hp > 0 and foe.possessed ==
+                                                                                         enemy.possessed]:
+                        attackedFoe = random.choice([foe for foe in enemies if
+                                                     foe.type in ['alien worshipper', 'alien cardinal']
+                                                     and foe.hp > 0 and foe.possessed ==
+                                                     enemy.possessed])
+                        attackedFoe.hp = 0
+                        printWithPause(0.5, '\033[93m', f'{attackedFoe.getPrintName()} got in the way of '
+                                                        f'your attack.')
 
-                elif enemy.type == 'alien commander' and [foe for foe in enemies if
-                                                          foe.type == 'alien protector']:
-                    printWithPause(0.5, '\033[93m', f'You hit {enemy.getPrintName()}, but they were '
-                                                    f'immune.')
-
-                else:
-                    if percentChance(50):
-                        damageInflicted = getReducedDamage(self.attack, enemy)
-                        printWithPause(0.5, '\033[93m', f'You hit {enemy.getPrintName()}, inflicting '
-                                                        f'{damageInflicted} '
-                                                        f'damage.')
+                    elif enemy.type == 'alien commander' and [foe for foe in enemies if
+                                                              foe.type == 'alien protector']:
+                        printWithPause(0.5, '\033[93m', f'You hit {enemy.getPrintName()}, but they were '
+                                                        f'immune.')
 
                     else:
-                        damageInflicted = getReducedDamage(self.attack, enemy) * 2
-                        printWithPause(0.5, '\033[93m', f'You hit {enemy.getPrintName()} with a critical '
-                                                        f'attack, inflicting {damageInflicted} damage.')
-
-                    enemy.hp -= damageInflicted
-                    # enemy.twirlingNunchucks is 1 if the enemy is a nun or mother superior that is using its ability
-                    # of twirling nunchucks else 0.
-
-                    if enemy.twirlingNunchucks:
-                        self.hp -= self.attack
-                        printWithPause(0.5, '\033[91m', f'{enemy.getPrintName()} deflected your attack '
-                                                        f'with their nunchucks, inflicting {damageInflicted} damage '
-                                                        f'to you.')
-
-                    if 'baton' in self.inventory:
-                        enemy.beHitByBaton()
-
-                    if enemy.gunWeakness and 'gun' in self.inventory:
-                        if enemy.type == 'alien commander' and [protector for protector in
-                                                                enemies if protector.type
-                                                                == 'alien protector']:
-                            printWithPause(0.5, '\033[93m', f'You shot {enemy.getPrintName()}, but they '
-                                                            f'were immune.')
+                        if percentChance(50):
+                            damageInflicted = getReducedDamage(self.attack, enemy) * damageMultipliers[attackType]
+                            printWithPause(0.5, '\033[93m', f'You hit {enemy.getPrintName()}, inflicting '
+                                                            f'{damageInflicted} '
+                                                            f'damage.')
 
                         else:
-                            damageInflicted = getReducedDamage(self.attack * 3 / 4, enemy)
+                            damageInflicted = getReducedDamage(self.attack, enemy) * 2 * damageMultipliers[attackType]
+                            printWithPause(0.5, '\033[93m', f'You hit {enemy.getPrintName()} with a '
+                                                            f'critical attack, inflicting {damageInflicted} damage.')
 
-                            if enemy.twirlingNunchucks:
-                                for i in range(self.inventory.count('gun')):
-                                    printWithPause(0.5, '\033[91m', f'You shot at {enemy.getPrintName()}, '
-                                                                    f'but they deflected your bullet back at you, '
-                                                                    f'inflicting {damageInflicted} damage to you.')
-                                    self.hp -= self.attack * 3 / 4
+                        enemy.hp -= damageInflicted
+                        # enemy.twirlingNunchucks is 1 if the enemy is a nun or mother superior that is
+                        # using its ability of twirling nunchucks else 0.
+
+                        if enemy.twirlingNunchucks:
+                            self.hp -= self.attack
+                            printWithPause(0.5, '\033[91m', f'{enemy.getPrintName()} deflected your attack '
+                                                            f'with their nunchucks, inflicting {damageInflicted} '
+                                                            f'damage to you.')
+
+                        if 'baton' in self.inventory:
+                            enemy.beHitByBaton()
+
+                        if enemy.gunWeakness and 'gun' in self.inventory:
+                            if enemy.type == 'alien commander' and [protector for protector in
+                                                                    enemies if protector.type
+                                                                               == 'alien protector']:
+                                printWithPause(0.5, '\033[93m', f'You shot {enemy.getPrintName()}, but they '
+                                                                f'were immune.')
 
                             else:
-                                for i in range(self.inventory.count('gun')):
-                                    printWithPause(0.5, '\033[93m', f'You shot {enemy.getPrintName()}, '
-                                                                    f'inflicting {damageInflicted} damage.')
-                                    enemy.hp -= damageInflicted
+                                damageInflicted = getReducedDamage(self.attack * 3 / 4, enemy)
 
-                            enemy.bleedingDamageFromGun = 6
-                            enemy.turnsOfBleedingFromGun = 3
+                                if enemy.twirlingNunchucks:
+                                    for i in range(self.inventory.count('gun')):
+                                        printWithPause(0.5, '\033[91m', f'You shot at {enemy.getPrintName()}, '
+                                                                        f'but they deflected your bullet back at you, '
+                                                                        f'inflicting {damageInflicted} damage to you.')
+                                        self.hp -= self.attack * 3 / 4
 
-            except AttributeError:
-                pass
+                                else:
+                                    for i in range(self.inventory.count('gun')):
+                                        printWithPause(0.5, '\033[93m', f'You shot {enemy.getPrintName()}, '
+                                                                        f'inflicting {damageInflicted} damage.')
+                                        enemy.hp -= damageInflicted
+
+                                enemy.bleedingDamageFromGun = 6
+                                enemy.turnsOfBleedingFromGun = 3
+
+                except AttributeError:
+                    pass
 
         else:
             printWithPause(0.5, '\033[96m', 'You are in an empty room.')
+
+        if attackType == 'h':
+            self.stun = 1
+            printWithPause(0.5, '\033[96mYou were stunned by your heavy attack.')
 
     def scan(self, enemies):
         """self.scan(enemies) makes the player scan."""
@@ -910,9 +926,9 @@ class player:
 
     def playMovementPuzzle(self, mode):
         self.board = {}
-        self.playerSpace = [4, 8]
         visitedSpaces = [[4, 8]]
         directionsPerKey = {'w': [0, -1], 'a': [-1, 0], 's': [0, 1], 'd': [1, 0]}
+        requiredTiles = []
 
         for i in range(9):
             for j in range(9):
@@ -923,16 +939,33 @@ class player:
                 self.board[(2 * j + 1, 2 * i + 1)] = ' ||| '
 
         for i in range(5):
-            for j in getRandomItemsFromList([h * 2 for h in range(5)], 2):
+            for j in getRandomItemsFromList([h * 2 for h in range(5)], 1):
                 self.board[(j, 2 * i + 1)] = ' ||| '
 
-        for i in [0, 2, 4]:
-            xCoord = random.randint(0, 8)
-            self.board[(xCoord, i)] = movementPuzzleFoe([xCoord, i],
-                                                   random.choice(['mage', 'charging', 'basic']), self.board)
-
+        self.playerSpace = [4, 8]
         self.board[(4, 8)] = '  i  '
-        requiredTiles = []
+
+        if mode == 'regular':
+            xCoord = random.randint(0, 8)
+            self.board[(xCoord, 0)] = movementPuzzleFoe([xCoord, 0],
+                                                        random.choice(['mage', 'charging', 'basic']), self.board)
+
+        elif mode == 'mysterious figure':
+            self.board[(4, 0)] = movementPuzzleFoe([4, 0], 'mysterious figure', self.board)
+
+        else:
+            xCoord = random.randint(0, 8)
+            self.board[(xCoord, 0)] = movementPuzzleFoe([xCoord, 0], mode, self.board)
+
+            if mode == 'alien pilot':
+                self.board[(xCoord, 6)] = movementPuzzleFoe([xCoord, 6],
+                                                            random.choice(['mage', 'charging', 'basic']), self.board)
+
+        if mode != 'mysterious figure':
+            for i in [2, 4]:
+                xCoord = random.randint(0, 8)
+                self.board[(xCoord, i)] = movementPuzzleFoe([xCoord, i],
+                                                            random.choice(['mage', 'charging', 'basic']), self.board)
 
         for i in range(9):
             requiredTiles.append(random.choice([list(key) for key in self.board.keys() if self.board[key] == '     ' and \
@@ -954,14 +987,24 @@ class player:
                         hasFireball = False
 
                         for enemy in [enemy for enemy in self.board.values() if type(enemy) == movementPuzzleFoe]:
-                            if [fireball for fireball in enemy.fireballs if fireball.coordinate == [i, j]]:
+                            fireballs = [fireball for fireball in enemy.fireballs if fireball.coordinate == [i, j]]
+
+                            if fireballs:
                                 hasFireball = True
+                                harmfulFireballs = [fireball for fireball in fireballs if fireball.hurts]
+
+                                if harmfulFireballs:
+                                    sprite = harmfulFireballs[0].sprite
+
+                                else:
+                                    sprite = fireballs[0].sprite
+
                                 break
 
                         if hasFireball:
-                            text += '\033[91m  *  \033[97m|'
+                            text += f'\033[91m{sprite}\033[97m|'
 
-                        elif [i, j] in requiredTiles and [i, j] not in visitedSpaces:
+                        elif [i, j] in requiredTiles and [i, j] not in visitedSpaces and mode != 'alien pilot':
                             text += '\033[93m  o  \033[97m|'
 
                         else:
@@ -977,24 +1020,44 @@ class player:
                 print('\033[97m', '-------------------------------------------------------')
 
         def enemyTurns():
-            for key in [key for key in self.board.keys() if type(self.board[key]) is movementPuzzleFoe]:
-                enemy = self.board[key]
-                self.board = enemy.action(self.board, self.playerSpace)
-
-                for fireball in enemy.fireballs:
-                    if fireball.move(self.board):
-                        enemy.fireballs.remove(fireball)
-
-                if enemy.coordinate == self.playerSpace or '  i  ' in enemy.tilesSkipped:
-                    printWithPause(2, '\033[97m', 'You lost.')
-                    return 1
-
-                for fireball in enemy.fireballs:
-                    if fireball.coordinate == self.playerSpace:
-                        printWithPause(2, '\033[97m', 'You lost.')
+            for enemy in [value for value in self.board.values() if type(value) is movementPuzzleFoe]:
+                if enemy.coordinate == self.playerSpace or '  i  ' in enemy.tilesSkipped or \
+                        self.board[tuple(enemy.coordinate)] == '  i  ':
+                    if enemy.type == 'alien warrior' and not [i for i in requiredTiles if i not in visitedSpaces]:
+                        printWithPause(2, '\033[97m', 'You won.')
                         return 1
 
+                    else:
+                        printWithPause(2, '\033[97m', 'You lost.')
+                        return 0
+
+                if enemy.type != 'drone':
+                    self.board = enemy.action(self.board, self.playerSpace)
+
+                    for fireball in enemy.fireballs:
+                        if fireball.move(self.board) or fireball.linger <= 0:
+                            enemy.fireballs.remove(fireball)
+
+                    for fireball in enemy.fireballs:
+                        if fireball.coordinate == self.playerSpace and fireball.hurts:
+                            printWithPause(2, '\033[97m', 'You lost.')
+                            return 0
+
+                if enemy.coordinate == self.playerSpace or '  i  ' in enemy.tilesSkipped or \
+                        self.board[tuple(enemy.coordinate)] == '  i  ':
+                    if enemy.type == 'alien warrior' and not [i for i in requiredTiles if i not in visitedSpaces]:
+                        printWithPause(2, '\033[97m', 'You won.')
+                        return 1
+
+                    else:
+                        printWithPause(2, '\033[97m', 'You lost.')
+                        return 0
+
         def playerTurn():
+            if '  i  ' not in list(self.board.values()):
+                printWithPause(0.5, '\033[97m', 'You lost.')
+                return 0
+
             movement = getInput('\033[97m', 'Where will you go? Use wasd:')
 
             if movement in list(directionsPerKey.keys()):
@@ -1007,33 +1070,52 @@ class player:
 
                     self.playerSpace = list(newLocation)
 
+                    for enemy in [enemy for enemy in self.board.values() if type(enemy) is movementPuzzleFoe]:
+                        if enemy.coordinate == self.playerSpace or '  i  ' in enemy.tilesSkipped:
+                            if enemy.type == 'alien warrior' and not \
+                                    [i for i in requiredTiles if i not in visitedSpaces] or enemy.type == 'alien pilot':
+                                printWithPause(2, '\033[97m', 'You won.')
+                                return 1
+
+                            printWithPause(2, '\033[97m', 'You lost.')
+                            return 0
+
+                        for fireball in enemy.fireballs:
+                            if fireball.coordinate == self.playerSpace and fireball.hurts:
+                                printWithPause(2, '\033[97m', 'You lost.')
+                                return 0
+
                     if self.playerSpace not in visitedSpaces:
                         visitedSpaces.append(self.playerSpace)
 
-            self.board[tuple(self.playerSpace)] = '  i  '
+                    if mode not in ['alien pilot', 'alien warrior'] and not \
+                            [i for i in requiredTiles if i not in visitedSpaces]:
+                        printWithPause(2, '\033[97m', 'You won.')
+                        return 1
 
-            if not [item for item in requiredTiles if not item in visitedSpaces]:
-                printWithPause(2, '\033[97m', 'You won.')
-                return 1
+            self.board[tuple(self.playerSpace)] = '  i  '
 
         while True:
             drawBoard()
+            x = playerTurn()
 
-            if playerTurn():
-                return 1
+            if x is not None:
+                return x
 
-            if enemyTurns():
-                return 0
+            x = enemyTurns()
+
+            if x is not None:
+                return x
 
     def playTicTacToe(self, mode):
         mode = 'regular' if mode == 'sun priest' else mode
-        
+
         self.board = {}
 
         for i in ['a', 'b', 'c']:
             for j in range(1, 4):
                 self.board[f'{i}{j}'] = ' '
-                
+
         def drawBoard():
             print('\033[97m', '      1     2     3')
             print('\033[97m', '   ------------------')
@@ -1042,7 +1124,7 @@ class player:
                 print('\033[97m', f'{i} |  {self.board[f"{i}1"]}  |  {self.board[f"{i}2"]}  |  '
                                   f'{self.board[f"{i}3"]}  |')
                 print('\033[97m', '   ------------------')
-                
+
         def handlePlayerTurn():
             spaceTaken = getInput('\033[97m', 'Which available space will you take? '
                                               'Type the name of the row of the space and then the number of the column '
@@ -1057,7 +1139,7 @@ class player:
 
             except KeyError:
                 printWithPause(0.5, '\033[97m', 'The space does not exist.')
-                
+
         def getLines():
             lines = []
 
@@ -1070,7 +1152,7 @@ class player:
             lines.append({'a1': self.board['a1'], 'b2': self.board['b2'], 'c3': self.board['c3']})
             lines.append({'c1': self.board['c1'], 'b2': self.board['b2'], 'a3': self.board['a3']})
             return lines
-        
+
         def enemyTurn():
             try:
                 if mode in ['regular', 'alien pilot']:
@@ -1103,7 +1185,6 @@ class player:
                 self.board[emptySpace] = 'O'
 
             except IndexError:
-                printWithPause(0.5, '\033[97m', 'you drew')
                 return 2
 
         while True:
@@ -1115,13 +1196,141 @@ class player:
                 printWithPause(0.5, '\033[97m', 'you won')
                 return 1
 
-            enemyTurn()
+            if enemyTurn() == 2:
+                printWithPause(0.5, '\033[97m', 'you drew')
+                return 2
+
             lines = getLines()
 
             if ['O', 'O', 'O'] in [list(line.values()) for line in lines]:
                 printWithPause(0.5, '\033[97m', 'you lost')
                 return 0
-        
+
+    def playTicTacToeExperiment(self):
+        def getInitializedBoard():
+            board = {}
+
+            for i in ['a', 'b', 'c']:
+                for j in range(1, 4):
+                    board[f'{i}{j}'] = ' '
+
+            return board
+
+        self.board = getInitializedBoard()
+
+        def drawBoard():
+            print('\033[97m', '      1     2     3')
+            print('\033[97m', '   ------------------')
+
+            for i in ['a', 'b', 'c']:
+                print('\033[97m', f'{i} |  {self.board[f"{i}1"]}  |  {self.board[f"{i}2"]}  |  '
+                                  f'{self.board[f"{i}3"]}  |')
+                print('\033[97m', '   ------------------')
+
+        def handlePlayerTurn():
+            spaceTaken = getInput('\033[97m', 'Which available space will you take? '
+                                              'Type the name of the row of the space and then the number of the column '
+                                              'of the space:')
+
+            try:
+                if self.board[spaceTaken] == ' ':
+                    self.board[spaceTaken] = 'X'
+
+                else:
+                    printWithPause(0.5, '\033[97m', 'The space is taken.')
+
+            except KeyError:
+                printWithPause(0.5, '\033[97m', 'The space does not exist.')
+
+        def getLines(board):
+            lines = []
+
+            for i in ['a', 'b', 'c']:
+                lines.append({f'{i}1': board[f'{i}1'], f'{i}2': board[f'{i}2'], f'{i}3': board[f'{i}3']})
+
+            for i in range(1, 4):
+                lines.append({f'a{i}': board[f'a{i}'], f'b{i}': board[f'b{i}'], f'c{i}': board[f'c{i}']})
+
+            lines.append({'a1': board['a1'], 'b2': board['b2'], 'c3': board['c3']})
+            lines.append({'c1': board['c1'], 'b2': board['b2'], 'a3': board['a3']})
+            return lines
+
+        def emptySpaces():
+            return [i for i in self.board.keys() if self.board[i] == ' ']
+
+        def getAlmostFinishedOLines():
+            return [line for line in lines if list(line.values()).count('O') == 2 and list(line.values()).count(' ')]
+
+        def getAlmstFinishedXLines():
+            return [line for line in lines if list(line.values()).count('X') == 2 and list(line.values()).count(' ')]
+
+        def enemyTurn():
+            paths = []
+            victoriousPaths = []
+            availableSpaces = emptySpaces()
+            emptySpacesQty = len(availableSpaces)
+            boardSpaces = [f'{i}{j}' for i in ['a', 'b', 'c'] for j in range(1, 4)]
+
+            for i in availableSpaces:
+                paths.append([['O', i]])
+
+            for g in range(ceiling(emptySpacesQty / 2)):
+                for i in paths:
+                    potentialSpaces = [h for h in boardSpaces if h not in [k[0] for k in i]]
+
+                    for j in availableSpaces:
+                        i += [['O', j]]
+
+                    if g < emptySpacesQty / 2 - 1:
+                        break
+
+                    for j in emptySpaces():
+                        i += [['X', j]]
+
+                for i in paths:
+                    for j in emptySpaces():
+                        i += [['X', j]]
+
+            for i in paths:
+                self.experimentalBoard = self.board
+
+                for j in i:
+                    self.experimentalBoard[j[1]] = j[0]
+                    experimentalLines = getLines(self.experimentalBoard)
+
+                    if [line for line in experimentalLines if list(line.values()).count('O') == 3]:
+                        victoriousPaths.append(i)
+
+                    elif [line for line in experimentalLines if list(line.values()).count('X') == 3]:
+                        paths.remove(i)
+
+            print(paths)
+
+            print(victoriousPaths)
+            try:
+                emptySpace = random.choice([key for key in list(self.board.keys()) if self.board[key] == ' '])
+                self.board[emptySpace] = 'O'
+
+            except IndexError:
+                printWithPause(0.5, '\033[97m', 'you drew')
+                return 2
+
+        while True:
+            drawBoard()
+            handlePlayerTurn()
+            lines = getLines(self.board)
+
+            if ['X', 'X', 'X'] in [list(line.values()) for line in lines]:
+                printWithPause(0.5, '\033[97m', 'you won')
+                return 1
+
+            enemyTurn()
+            lines = getLines(self.board)
+
+            if ['O', 'O', 'O'] in [list(line.values()) for line in lines]:
+                printWithPause(0.5, '\033[97m', 'you lost')
+                return 0
+
     def playTicTacToeAgainstTheSunPriest(self):
         self.board = {}
 
@@ -1153,11 +1362,11 @@ class player:
 
             try:
                 almostFinishedXLines = [line for line in lines if \
-                                       list(line.values()).count('X') == 2 and \
-                                       list(line.values()).count(' ')]
+                                        list(line.values()).count('X') == 2 and \
+                                        list(line.values()).count(' ')]
                 almostFinishedOLines = [line for line in lines if \
-                                       list(line.values()).count('O') == 2 and \
-                                       list(line.values()).count(' ')]
+                                        list(line.values()).count('O') == 2 and \
+                                        list(line.values()).count(' ')]
 
                 if almostFinishedOLines:
                     lineFinished = random.choice(almostFinishedOLines)
@@ -1300,9 +1509,6 @@ class player:
                     enemySpots = [tile for tile in list(self.board.keys()) if self.board[tile] == 'O']
                     playerSpots = [tile for tile in list(self.board.keys()) if self.board[tile] == 'O']
 
-
-
-
                 self.board[emptySpace] = 'O'
                 turn += 1
 
@@ -1414,14 +1620,14 @@ class player:
         for i in [0, 2, 4]:
             xCoord = random.randint(0, 8)
             self.board[(xCoord, i)] = movementPuzzleFoe([xCoord, i],
-                                                   random.choice(['mage', 'charging', 'basic']), self.board)
+                                                        random.choice(['mage', 'charging', 'basic']), self.board)
 
         self.board[(4, 8)] = '  i  '
         requiredTiles = []
 
         for i in range(9):
             requiredTiles.append(random.choice([list(key) for key in self.board.keys() if self.board[key] == '     ' and \
-                                                  key[1] == i]))
+                                                key[1] == i]))
 
         while True:
             self.showMovementPuzzle(self.board, visitedSpaces, requiredTiles)
@@ -1473,13 +1679,17 @@ class player:
     def playGoblinGame(self, mode):
         print('\033[97m')
         doors = {}
+        self.warriorFound = 0
+        self.highestFootprintNumberFound = 0
 
         class door:
-            def __init__(self, coordinate):
+            def __init__(self, coordinate, number=None):
                 self.coordinate = coordinate.copy()
                 self.lastCoordinate = None
                 self.hasGoblin = 0
                 self.strings = ['------ ', '|      ', '|      ', '|      ', '|      ', '| |-|  ']
+                self.number = number
+                self.showsNumber = 1
 
             def getStrings(self):
                 strings = []
@@ -1499,6 +1709,10 @@ class player:
 
                 strings = ['-------'] + [f'|{(self.coordinate[0] + 1, self.coordinate[1] + 1)}'] + \
                           ['|      ' for i in range(4 - len(strings))] + strings
+
+                if mode == 'unknown character' and self.showsNumber:
+                    strings.append(f'|  {self.number}{" " * (4 - len(str(self.number)))}')
+
                 strings += ['|\033[93m |-|  \033[97m'] if mode == 'sun priest' and self.hasGoblin else ['| |-|  ']
                 return strings
 
@@ -1540,24 +1754,56 @@ class player:
 
         def guessTheDoor():
             guess = getInput('\033[97m', 'What door will you open? Enter the coordinate:')
+            wrong = True
 
             try:
                 guess = eval(guess)
                 guess = (guess[0] - 1, guess[1] - 1)
 
-                if doors[guess].hasGoblin:
-                    printWithPause(0.5, 'You won.')
-                    return 1
+                if mode != 'unknown character':
+                    if doors[guess].hasGoblin:
+                        if mode == 'alien warrior' and not self.warriorFound:
+                            wrong = False
+                            self.warriorFound = True
+                            warriorCoordinate = [i.coordinate for i in doors.values() if i.hasGoblin][0]
+                            printWithPause(1, f"The alien warrior got away. Find him again to win. He is at "
+                                              f"{(warriorCoordinate[0] + 1, warriorCoordinate[1] + 1)}. The doors have "
+                                              f"been shuffled again.")
+
+                        else:
+                            printWithPause(0.5, 'You won.')
+                            return 1
+
+                else:
+                    if doors[guess].number == self.highestFootprintNumberFound + 1:
+                        self.highestFootprintNumberFound = doors[guess].number
+                        wrong = False
+
+                        if self.highestFootprintNumberFound == 12:
+                            printWithPause(3, 'You found what appears to be the alien commander.')
+                            printWithPause(3, 'But you actually found a decoy.')
+                            printWithPause(3, 'The decoy exploded, killing you.')
+                            printWithPause(3, 'You lost.')
+                            return 0
+
+                    else:
+                        printWithPause(2, 'You lost.')
+                        return 0
 
             except:
                 pass
 
-            printWithPause(0.5, 'Try again.')
+            if wrong:
+                printWithPause(0.5, 'Try again.')
+
             return shuffleDoors()
+
+        numbers = [i for i in range(1, 13)]
+        random.shuffle(numbers)
 
         for i in range(6):
             for j in range(2):
-                doors[(i, j)] = door([i, j])
+                doors[(i, j)] = door([i, j], number=numbers[6 * j + i])
 
         rightDoor = random.choice(list(doors.values()))
         rightDoor.hasGoblin = 1
@@ -1570,6 +1816,17 @@ class player:
                 doors = shuffleDoors()
                 drawBoard()
 
+        elif mode == 'unknown character':
+            doors = shuffleDoors()
+            drawBoard()
+
+            for i in doors.values():
+                i.showsNumber = 0
+
+            for i in range(15):
+                doors = shuffleDoors()
+                drawBoard()
+
         else:
             doors = shuffleDoors()
             drawBoard()
@@ -1578,8 +1835,8 @@ class player:
             x = guessTheDoor()
             doors = x
 
-            if x == 1:
-                return 1
+            if type(x) == int:
+                return x
 
             drawBoard()
 
@@ -1602,7 +1859,8 @@ class player:
                                           "goblin game, or 'm' to play the movement puzzle.")
 
             if action == 'e':
-                self.handleTitleScreen(file)
+                if self.handleTitleScreen(file):
+                    return 1
 
             elif action == 't':
                 action = None
@@ -1624,7 +1882,8 @@ class player:
                 modesPerAction = {'1': 'unknown character', '2': 'alien pilot', '3': 'alien warrior', '4': 'sun priest'}
 
                 while action not in list(modesPerAction.keys()):
-                    modesPerAction = {'1': 'drone', '2': 'alien pilot', '3': 'alien warrior', '4': 'sun priest'}
+                    modesPerAction = {'1': 'unknown character', '2': 'alien pilot', '3': 'alien warrior',
+                                      '4': 'sun priest'}
                     action = getInput("Who will you face in tic tac toe? Type 'e' to exit,'1' to face an unknown "
                                       "character, '2' to face the alien pilot, '3' to face the alien warrior, or "
                                       "'4' to face the sun priest.")
@@ -1639,7 +1898,8 @@ class player:
                 modesPerAction = {'1': 'mysterious figure', '2': 'alien pilot', '3': 'alien warrior', '4': 'sun priest'}
 
                 while action not in list(modesPerAction.keys()):
-                    modesPerAction = {'1': 'drone', '2': 'alien pilot', '3': 'alien warrior', '4': 'sun priest'}
+                    modesPerAction = {'1': 'mysterious figure', '2': 'alien pilot', '3': 'alien warrior',
+                                      '4': 'sun priest'}
                     action = getInput("Who will you face in tic tac toe? Type 'e' to exit,'1' to face a mysterious "
                                       "figure, '2' to face the alien pilot, '3' to face the alien warrior, or "
                                       "'4' to face the sun priest.")
@@ -1655,6 +1915,9 @@ class player:
         while action != 'y':
             action = getInput('\033[96m', "Type 'y' to play, 'b' to view your bestiary, 'e' to exit the game, "
                                           "'s' to delete a save, or 'p' to play a game against an enemy:")
+
+            if action == 'y':
+                return 1
 
             if action == 'b':
                 self.showBestiary()
@@ -1678,4 +1941,5 @@ class player:
                         pass
 
             elif action == 'p':
-                self.handlePuzzleMenu(file)
+                if self.handlePuzzleMenu(file):
+                    return 1

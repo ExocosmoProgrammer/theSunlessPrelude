@@ -181,3 +181,7 @@ def betterRange(a, b):
 
 def sign(a):
     return 0 if a == 0 else a / abs(a)
+
+
+def ceiling(a):
+    return a if int(a) == a else a % 1 + 1

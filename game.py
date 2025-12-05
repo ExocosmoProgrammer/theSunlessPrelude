@@ -5,8 +5,8 @@ import os
 from variables import foesPerLevel, bossesPerLevel, oneTimeUseItems, songsPerLevel, initialFoesPerLevel
 from definitions import printWithPause, percentChance, greater, saveWithPickle, loadWithPickle, \
     getListOfThingsWithCommas, printInRainbowWithPause, getInput, lesser, play, getChoicesOfItemsFromList
-from player import player
 from foe import foe
+from player import player
 
 print('\033[40m')
 
@@ -14,9 +14,21 @@ for i in range(200):
     print('')
 
 
+def getFile():
+    global file
+    file = 0
+
+    while file not in [1, 2, 3, 4]:
+        try:
+            file = int(getInput('\033[96m', 'Choose your file. Type the file number in 1-4:'))
+
+        except ValueError:
+            pass
+
+
 def startGame():
     """The startGame function should initialize the game."""
-    global number, room, level, pro, foes, levelFourSpawnCooldown, playerClass, canonCooldown, file, victorious
+    global number, room, level, pro, foes, levelFourSpawnCooldown, playerClass, canonCooldown, victorious
     # Once the player dies, the victorious variable is used to tell if the player has won. The number variable
     # determines what the id number of the next foe should be. If the player is in level 3, the canonCooldown variable
     # keeps track of when the canon should fire next.
@@ -26,19 +38,11 @@ def startGame():
     level = 1
     pro = player()
     foes = [foe('alien soldier', 1)]
-    play('The War.mp3')
+    play('The War.mp3', pro, save=False, canRestart=True)
     printWithPause(3, 'Day 12')
     levelFourSpawnCooldown = 0
     playerClass = None
     canonCooldown = 3
-    file = 0
-
-    while file not in [1, 2, 3, 4]:
-        try:
-            file = int(getInput('\033[96m', 'Choose your file. Type the file number in 1-4:'))
-
-        except ValueError:
-            pass
 
     while playerClass not in ['police', 'soldier', 'citizen']:
         playerClass = getInput('\033[96m', "Pick your class. The choices are 'police', 'soldier', "
@@ -67,28 +71,35 @@ def startAfterDeath():
     # determines what the id number of the next foe should be. If the player is in level 3, the canonCooldown variable
     # keeps track of when the canon should fire next.
     victorious = 0
+    availableClasses = pro.availableClasses.copy()
     pro = player()
-    play('The War.mp3')
+    play('The War.mp3', pro)
     printWithPause(3, 'Day 12')
     levelFourSpawnCooldown = 0
     playerClass = None
     canonCooldown = 3
 
-    while playerClass not in ['police', 'soldier', 'citizen']:
-        playerClass = getInput('\033[96m', "Pick your class. The choices are 'police', 'soldier', "
-                                           "and 'citizen':")
+    while playerClass not in availableClasses:
+        playerClass = getInput(getListOfThingsWithCommas('and', availableClasses, ending=":",
+                                                         beginning="\033[96mPick your class. The choices are "))
 
-    if playerClass == 'police':
-        pro.maxHp = 100
-        pro.inventory = ['gun', 'baton']
-
-    elif playerClass == 'soldier':
-        pro.maxHp = 100
-        pro.inventory = ['knife', 'shield']
-
-    elif playerClass == 'citizen':
-        pro.maxHp = 150
-        pro.inventory = ['regen'] * 2
+    
+    match playerClass:
+        case 'police':
+            pro.maxHp = 100
+            pro.inventory = ['gun', 'baton']
+    
+        case 'soldier':
+            pro.maxHp = 100
+            pro.inventory = ['knife', 'shield']
+    
+        case 'citizen':
+            pro.maxHp = 150
+            pro.inventory = ['regen'] * 2
+    
+        case 'commander':
+            pro.maxHp = 50
+            pro.inventory = ['strong drone', 'radio']
 
     pro.hp = pro.maxHp
     pro.initialHp = pro.hp
@@ -137,19 +148,19 @@ def addBoss():
     number += 1
 
     if level == 1:
-        play("commander'sThemePiano.mp3")
+        play("newCommanderTheme.mp3", pro)
         printWithPause(2, '\033[91m', "You found an alien commander.")
         printWithPause(2, '\033[91m', 'Kill the commander.')
 
     elif level == 2:
-        play('Hyperspace.mp3')
+        play('Hyperspace.mp3', pro)
         printWithPause(2, '\033[91m', "You reached the ship's cockpit.")
         printWithPause(2, '\033[91m', "If you manage to kill the pilot, you will gain "
                        "control of the ship.")
         printWithPause(2, '\033[91m', 'Kill the pilot.')
 
     elif level == 3:
-        play('Certainty .mp3')
+        play('Certainty .mp3', pro)
         printWithPause(2, '\033[91m', "You reached the room where you can regain access "
                        "to the ship's controls.")
         printWithPause(2, '\033[91m', "The room is being guarded by an alien warrior.")
@@ -207,6 +218,17 @@ def removeFoes():
                                 pro.inventory.append(key)
                                 printWithPause(0.5, '\033[95m', f'You got {key}.')
 
+                                if key == 'drone' and 'strong drone' in pro.inventory:
+                                    pro.strongDroneForCommander.damageMultiplier *= 1.5
+                                    pro.strongDroneForCommander.hp += 25
+                                    printWithPause(1, "\033[96mThe drone fused with your stronger "
+                                                        "drone to further empower it.")
+
+                            elif 'strong drone' in pro.inventory and pro.drone.inventory.count(key) == 0:
+                                printWithPause(0.5, '\033[96m', f'You found {key}. You could '
+                                                                f'not pick it up, but your drone did. ')
+                                pro.strongDroneForCommander.inventory.append(key)
+
                             elif 'drone' in pro.inventory and pro.drone.inventory.count(key) == 0:
                                 printWithPause(0.5, '\033[96m', f'You found {key}. You could '
                                                f'not pick it up, but your drone did. ')
@@ -220,13 +242,14 @@ def removeFoes():
                                 printWithPause(0.5, '\033[96m', f'You found {key}. You '
                                                                 f'could not pick it up.')
 
-                    if enemy.givesPotions and percentChance(25):
+                    if enemy.givesPotions and percentChance(34):
                         pro.potions += 1
                         printWithPause(0.5, '\033[96m', 'You acquired a potion.')
 
             if enemy.type == 'alien commander':
                 foes = []
                 pro.potions += 5
+                pro.availableClasses += ['commander'] if 'commander' not in pro.availableClasses else []
                 number = 1
                 printWithPause(0.5, '\033[96m', f'You got 5 potions.')
                 printWithPause(4, '\033[96m', 'You killed the alien commander. ')
@@ -311,7 +334,7 @@ def removeFoes():
             elif enemy.type == 'sun priest':
                 hp = pro.hp
                 pro.hp = lesser(random.randint(1, 10), pro.hp)
-                play('Extinction.mp3')
+                play('Extinction.mp3', pro)
                 printWithPause(5, '\033[91m', f'The sun priest hit you, inflicting {hp - pro.hp} damage.')
                 printWithPause(5, '\033[95m', 'He has collapsed. He is helpless.')
                 printWithPause(5, '\033[95m', 'He is begging for your mercy and promising to bring '
@@ -325,7 +348,7 @@ def removeFoes():
                 while getInput('\033[96m', 'Will you proceed? y/n:') != 'y':
                     pass
 
-                play('My song 116.mp3')
+                play('My song 116.mp3', pro)
                 printWithPause(4, '\033[96m', 'You killed the sun priest.')
                 printWithPause(4, '\033[96m', "You are victorious.")
                 printWithPause(4, '\033[96m', "You sit back and wait to die, glad to have saved your planet.")
@@ -433,7 +456,7 @@ def handleLevelFourBossSpawn():
     global foes, number
     pro.sunPriestSpawned = 1
     foes = [foe('sun priest', number, scanned=1)]
-    play('inChurch2.mp3')
+    play('inChurch2.mp3', pro)
     printWithPause(5, '\033[91m', "You escaped the mob that was attacking you and fled to the cathedral.")
     printWithPause(5, '\033[91m', "Inside the cathedral, you found the priest that controls Earth's sun.")
     printWithPause(5, '\033[91m', 'Kill the priest.')
@@ -446,7 +469,8 @@ def handleLevelFourBossSpawn():
 def saveGame():
     """Saves the game."""
     saveWithPickle(pro, f'playerSave{file}.pickle')
-    variousData = {'level': level, 'room': room, 'foes': foes, 'number': number, 'canonCooldown': canonCooldown}
+    variousData = {'level': level, 'room': room, 'foes': foes, 'number': number, 'canonCooldown': canonCooldown,
+                   'levelFourSpawnCooldown': levelFourSpawnCooldown, 'victorious': victorious}
     saveWithPickle(variousData, f'variousData{file}.pickle')
 
 
@@ -454,7 +478,7 @@ def loadGame():
     """Tries to load the player's file."""
 
     try:
-        global pro, level, room, foes, number, canonCooldown
+        global pro, level, room, foes, number, canonCooldown, levelFourSpawnCooldown, victorious
         pro = loadWithPickle(f'playerSave{file}.pickle')
         variousData = loadWithPickle(f'variousData{file}.pickle')
         level = variousData['level']
@@ -462,14 +486,17 @@ def loadGame():
         foes = variousData['foes']
         number = variousData['number']
         canonCooldown = variousData['canonCooldown']
+        levelFourSpawnCooldown = variousData['levelFourSpawnCooldown']
+        victorious = variousData['victorious']
 
         for enemy in foes:
             enemy.getUpdate()
 
-        play(songsPerLevel[level])
+        play(pro.song, pro, canRestart=True)
+        return True
 
-    except FileNotFoundError:
-        pass
+    except (FileNotFoundError, KeyError):
+        return False
 
 
 def handleDeath():
@@ -480,10 +507,12 @@ def handleDeath():
     hasReachedLevelTwo = pro.hasReachedLevelTwo
     hasReachedLevelFour = pro.hasReachedLevelFour
     foesEncountered = pro.foesEncountered
+    availableClasses = pro.availableClasses
     startAfterDeath()
     pro.hasReachedLevelFour = hasReachedLevelFour
     pro.hasReachedLevelTwo = hasReachedLevelTwo
     pro.foesEncountered = foesEncountered
+    pro.availableClasses = availableClasses
 
     if pro.hasReachedLevelTwo:
         actions.append("'2' to start at level 2")
@@ -591,9 +620,13 @@ def getLootForRetry(initialLevel):
         else:
             pro.potions = 25
 
+play('The War.mp3', save=False)
+getFile()
 
-startGame()
-loadGame()
+if not loadGame():
+    startGame()
+
+pro.getUpdate()
 pro.handleTitleScreen(file)
 
 while True:
@@ -625,7 +658,7 @@ while True:
                 level += 1
                 room = 0
                 addFoes()
-                play(songsPerLevel[level])
+                play(songsPerLevel[level], pro)
 
             removeFoes()
 
@@ -640,12 +673,17 @@ while True:
             if possessedFoes:
                 targetList.append(possessedFoes)
 
-            if 'drone' in pro.inventory:
+            if 'strong drone' in pro.inventory:
+                targetList.append([pro.strongDroneForCommander])
+
+            elif 'drone' in pro.inventory:
                 targetList.append([pro.drone])
 
             for enemy in foes:
                 if not enemy.possessed:
-                    enemy.actAsFoe(random.choice(random.choice(targetList)), number, foes, pro)
+                    target = pro.strongDroneForCommander if pro.strongDroneForCommander.protecting else \
+                        random.choice(random.choice(targetList))
+                    enemy.actAsFoe(target, number, foes, pro)
 
                 else:
                     try:
@@ -662,16 +700,16 @@ while True:
             handleLevelFourSpawning()
 
     if level == 1:
-        play('betterOp28No20Chopin.mp3')
+        play('betterOp28No20Chopin.mp3', pro)
         printWithPause(5, '\033[91m', 'You died. The alien troops will destroy the world.')
 
     elif level < 4:
-        play('betterOp28No20Chopin.mp3')
+        play('betterOp28No20Chopin.mp3', pro)
         printWithPause(5, '\033[91m', 'You died. The alien troops will return. Without you, they will '
                        'have little resistance in destroying the world.')
 
     elif not victorious:
-        play('betterOp28No20Chopin.mp3')
+        play('betterOp28No20Chopin.mp3', pro)
         printWithPause(5, '\033[91m', "Your efforts were all for nothing. The alien troops will return "
                        "to destroy the world.")
 
@@ -685,7 +723,7 @@ while True:
             print('')
 
         handleDeath()
-        play(songsPerLevel[level])
+        play(songsPerLevel[level], pro)
 
     else:
         saveGame()

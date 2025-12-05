@@ -2,10 +2,11 @@ import random
 import copy
 import sys
 import os
+import time
 
 from definitions import (lesser, printWithPause, getReducedDamage, percentChance, getTarget,
                          getListOfThingsWithCommas, greater, getInput, getRandomItemsFromList, ceiling,
-                         printInRainbowWithPause)
+                         printInRainbowWithPause, strIndex, play)
 from variables import (oneTimeUseItems, hpPerFoe, attackPerFoe, lootPerFoe, descriptionPerFoe, combatInfoPerFoe,
                        bestiaryOrder)
 from drone import drone
@@ -36,6 +37,7 @@ class player:
         self.hasReachedLevelFour = 0
         self.hasReachedLevelTwo = 0
         self.drone = drone()
+        self.strongDroneForCommander = drone(empowered=True)
         self.isDrone = 0
         self.poisonDamage = 0
         self.turnsOfPoisonDamage = 0
@@ -44,13 +46,21 @@ class player:
         self.burningDamage = 0
         self.turnsOfBurningDamage = 0
         self.foesEncountered = []
-        self.lockedBoxPuzzles = [self.playTicTacToe, self.playGoblinGame,
+        self.lockedBoxPuzzles = [self.playTicTacToe, self.playWhereIsWaldo,
                                  self.playMovementPuzzle]
         self.playerSpace = [0, 0]
         self.board = {}
         self.experimentalBoard = {}
         self.warriorFound = False
         self.highestFootprintNumberFound = 0
+        self.rageCooldown = 7
+        self.rageDuration = 0
+        self.adrenalineCooldown = 7
+        self.adrenalineDuration = 0
+        self.damageMultiplierForAttackType = 1
+        self.song = "The War.mp3"
+        self.availableClasses = ['police', 'soldier', 'citizen']
+        self.lastSongPlayed = None
 
         for key in extra.keys():
             exec(f'self.{key} = extra[key]')
@@ -86,8 +96,20 @@ class player:
             self.heal(3)
             printWithPause(0.5, '\033[96m', f'You regained {self.hp - oldHp} hit points.')
 
+    def activateRage(self):
+        self.rageCooldown = 7
+        self.rageDuration = 2
+        self.updateStats()
+
+    def activateAdrenaline(self):
+        self.adrenalineCooldown = 7
+        self.adrenalineDuration = 2
+
     def basicAttack(self, enemies):
         """self.basicAttack(self, enemies) makes self perform  basic attack."""
+
+        if self.rageCooldown <= 0 and getInput('\033[96mWould you like to activate rage? Type y/n:') == 'y':
+            self.activateRage()
 
         if 'sacrificial dagger' in self.inventory and self.attack == self.standardAttack and not \
                 [enemy for enemy in enemies if enemy.type == 'helpless sun priest'] \
@@ -101,6 +123,8 @@ class player:
         while attackType not in ['l', 'r', 'h']:
             attackType = getInput("\033[96mPress 'l' to perform two light attacks, 'r' to perform a regular attack, or "
                                   "'h' to perform a heavy attack:")
+
+        self.damageMultiplierForAttackType = damageMultipliers[attackType]
 
         if enemies:
             for i in range(2 if attackType == 'l' else 1):
@@ -132,13 +156,14 @@ class player:
 
                     else:
                         if percentChance(50):
-                            damageInflicted = getReducedDamage(self.attack, enemy) * damageMultipliers[attackType]
+                            damageInflicted = getReducedDamage(self.attack, enemy) * self.damageMultiplierForAttackType
                             printWithPause(0.5, '\033[93m', f'You hit {enemy.getPrintName()}, inflicting '
                                                             f'{damageInflicted} '
                                                             f'damage.')
 
                         else:
-                            damageInflicted = getReducedDamage(self.attack, enemy) * 2 * damageMultipliers[attackType]
+                            damageInflicted = getReducedDamage(self.attack, enemy) * 2 * \
+                                              self.damageMultiplierForAttackType
                             printWithPause(0.5, '\033[93m', f'You hit {enemy.getPrintName()} with a '
                                                             f'critical attack, inflicting {damageInflicted} damage.')
 
@@ -153,17 +178,18 @@ class player:
                                                             f'damage to you.')
 
                         if 'baton' in self.inventory:
-                            enemy.beHitByBaton()
+                            enemy.beHitByBaton(self)
 
                         if enemy.gunWeakness and 'gun' in self.inventory:
                             if enemy.type == 'alien commander' and [protector for protector in
                                                                     enemies if protector.type
                                                                                == 'alien protector']:
-                                printWithPause(0.5, '\033[93m', f'You shot {enemy.getPrintName()}, but they '
-                                                                f'were immune.')
+                                printWithPause(0.5, '\033[93m', f'You shot {enemy.getPrintName()}, but '
+                                                                f'they were immune.')
 
                             else:
-                                damageInflicted = getReducedDamage(self.attack * 3 / 4, enemy)
+                                damageInflicted = getReducedDamage(self.attack * 3 / 4 * \
+                                                                   self.damageMultiplierForAttackType, enemy)
 
                                 if enemy.twirlingNunchucks:
                                     for i in range(self.inventory.count('gun')):
@@ -180,6 +206,8 @@ class player:
 
                                 enemy.bleedingDamageFromGun = 6
                                 enemy.turnsOfBleedingFromGun = 3
+
+                    self.rageCooldown -= 1
 
                 except AttributeError:
                     pass
@@ -642,8 +670,23 @@ class player:
         self.attack = self.temporaryAttack + self.standardAttack
         self.temporaryAttackDuration -= 1
 
+        if self.blocking:
+            self.damageReduction = 75
+
+        else:
+            self.damageReduction = 0
+
         if self.temporaryAttackDuration <= 0:
             self.temporaryAttack = 0
+
+        if self.rageDuration > 0:
+            self.attack *= 1.5
+
+        if self.adrenalineDuration > 0:
+            self.damageReduction = lesser(self.damageReduction + 50, 100)
+
+        self.rageDuration -= 1
+        self.adrenalineDuration -= 1
 
     def releaseSoul(self):
         """Gets player input on what soul to release and tries to release the soul that the player says to release."""
@@ -698,6 +741,7 @@ class player:
         """Handles all of the player's actions."""
         self.blocking = 0
         self.damageReduction = 0
+        self.updateStats()
 
         if not self.sunPriestSpotted and self.enemiesKilledInLevelFour >= 15:
             self.sunPriestSpotted = 1
@@ -709,7 +753,10 @@ class player:
             printWithPause(0.5, '\033[96m', 'You are stunned.')
 
         else:
-            self.updateStats()
+            if self.adrenalineCooldown <= 0 and getInput('\033[96mWould you like to activate adrenaline? Enter y/n:') \
+                    == 'y':
+                self.activateAdrenaline()
+
             actionList = ["Type 'a' to perform a basic attack", "'s' to scan"]
 
             if self.potions:
@@ -778,7 +825,10 @@ class player:
                     if [enemy for enemy in enemies if enemy.hp > 0 and not enemy.possessed]:
                         self.butterflyKnifeAttack(enemies)
 
-                if 'drone' in self.inventory:
+                if 'strong drone' in self.inventory:
+                    self.strongDroneForCommander.actions(enemies, self)
+
+                elif 'drone' in self.inventory:
                     self.drone.actions(enemies, self)
 
             else:
@@ -850,7 +900,7 @@ class player:
         return whatToReturn
 
     def showBestiary(self):
-        for enemy in [enemy for enemy in bestiaryOrder if enemy in self.foesEncountered]:
+        for enemy in [enemy for enemy in bestiaryOrder if enemy in self.foesEncountered or True]:
             print('')
             print(f'Name: {enemy}')
             print(f'Hp: {hpPerFoe[enemy]}')
@@ -925,6 +975,12 @@ class player:
             print('\033[97m', '-------------------------------------------------------')
 
     def playMovementPuzzle(self, mode):
+        if mode == 'mysterious figure':
+            printWithPause(2, "\033[91mThe mysterious figure removes their mask. "
+                              "You see that they are actually...")
+            play("newCommanderTheme.mp3", self, save=False)
+            printWithPause(2, "The alien commander!")
+
         self.board = {}
         visitedSpaces = [[4, 8]]
         directionsPerKey = {'w': [0, -1], 'a': [-1, 0], 's': [0, 1], 'd': [1, 0]}
@@ -938,9 +994,10 @@ class player:
             for j in range(5):
                 self.board[(2 * j + 1, 2 * i + 1)] = ' ||| '
 
-        for i in range(5):
-            for j in getRandomItemsFromList([h * 2 for h in range(5)], 1):
-                self.board[(j, 2 * i + 1)] = ' ||| '
+        if mode != 'mysterious figure' or True:
+            for i in range(5):
+                for j in getRandomItemsFromList([h * 2 for h in range(5)], 1):
+                    self.board[(j, 2 * i + 1)] = ' ||| '
 
         self.playerSpace = [4, 8]
         self.board[(4, 8)] = '  i  '
@@ -1077,6 +1134,16 @@ class player:
                                 printWithPause(2, '\033[97m', 'You won.')
                                 return 1
 
+                            elif enemy.type == 'mysterious figure' and not \
+                                    [i for i in requiredTiles if i not in visitedSpaces]:
+                                printWithPause(2, '\033[97mYou reached the commander.')
+                                printWithPause(2, '\033[97mBut he defeated you.')
+                                play('betterOp28No20Chopin.mp3', self, save=False)
+                                printWithPause(10, "You died. The alien troops will destroy the world.")
+
+                                if input("Will you play again? y/n:") != 'y':
+                                    sys.exit()
+
                             printWithPause(2, '\033[97m', 'You lost.')
                             return 0
 
@@ -1088,7 +1155,7 @@ class player:
                     if self.playerSpace not in visitedSpaces:
                         visitedSpaces.append(self.playerSpace)
 
-                    if mode not in ['alien pilot', 'alien warrior'] and not \
+                    if mode not in ['alien pilot', 'alien warrior', 'mysterious figure'] and not \
                             [i for i in requiredTiles if i not in visitedSpaces]:
                         printWithPause(2, '\033[97m', 'You won.')
                         return 1
@@ -1109,12 +1176,23 @@ class player:
 
     def playTicTacToe(self, mode):
         mode = 'regular' if mode == 'sun priest' else mode
+        specialCaseForCommander = True
+
+        if mode == 'drone':
+            printWithPause(2, '\033[91mThe drone moves aside to reveal...')
+            play("newCommanderTheme.mp3", self, save=False)
+            printWithPause(2, 'The alien commander!')
+            printWithPause(3, "Taking advantage of your shock, the commander places an O on your board.")
 
         self.board = {}
 
         for i in ['a', 'b', 'c']:
             for j in range(1, 4):
                 self.board[f'{i}{j}'] = ' '
+
+        if mode == 'drone':
+            initialOCoord = random.choice(['a', 'c']) + random.choice(['1', '1'])
+            self.board[initialOCoord] = 'O'
 
         def drawBoard():
             print('\033[97m', '      1     2     3')
@@ -1140,27 +1218,83 @@ class player:
             except KeyError:
                 printWithPause(0.5, '\033[97m', 'The space does not exist.')
 
-        def getLines():
+        def getLines(boardUsed):
             lines = []
 
             for i in ['a', 'b', 'c']:
-                lines.append({f'{i}1': self.board[f'{i}1'], f'{i}2': self.board[f'{i}2'], f'{i}3': self.board[f'{i}3']})
+                lines.append({f'{i}1': boardUsed[f'{i}1'], f'{i}2': boardUsed[f'{i}2'], f'{i}3': boardUsed[f'{i}3']})
 
             for i in range(1, 4):
-                lines.append({f'a{i}': self.board[f'a{i}'], f'b{i}': self.board[f'b{i}'], f'c{i}': self.board[f'c{i}']})
+                lines.append({f'a{i}': boardUsed[f'a{i}'], f'b{i}': boardUsed[f'b{i}'], f'c{i}': boardUsed[f'c{i}']})
 
-            lines.append({'a1': self.board['a1'], 'b2': self.board['b2'], 'c3': self.board['c3']})
-            lines.append({'c1': self.board['c1'], 'b2': self.board['b2'], 'a3': self.board['a3']})
+            lines.append({'a1': boardUsed['a1'], 'b2': boardUsed['b2'], 'c3': boardUsed['c3']})
+            lines.append({'c1': boardUsed['c1'], 'b2': boardUsed['b2'], 'a3': boardUsed['a3']})
             return lines
 
-        def enemyTurn():
-            try:
-                if mode in ['regular', 'alien pilot']:
+        def handleSpecialCasesForCommander():
+            xAndOQty = len([i for i in self.board.values() if i != ' '])
+            oppositeCorner = ('a' if initialOCoord[0] == 'c' else 'c') + ('1' if initialOCoord[1] == '3' else '3')
+            otherCorners = [initialOCoord[0] + oppositeCorner[1], oppositeCorner[0] + initialOCoord[1]]
+            adjacentSpaces = [initialOCoord[0] + '2', 'b' + initialOCoord[1]]
+            emptySpaces = [i for i in self.board.keys() if self.board[i] == ' ']
+            specialCaseForCommander = False
+
+            match xAndOQty:
+                case 1:
+                    printWithPause(2, '\033[97mThe commander waits for you to place an X.')
+                    specialCaseForCommander = True
+
+                case 2:
+                    initialXCoord = [i for i in self.board.keys() if self.board[i] == 'X'][0]
+
+                    if initialXCoord in otherCorners:
+                        self.board[oppositeCorner] = 'O'
+                        specialCaseForCommander = False
+
+                    elif initialXCoord in adjacentSpaces:
+                        self.board['b2'] = 'O'
+                        specialCaseForCommander = True
+                    
+                    elif initialXCoord == 'b2':
+                        self.board[random.choice(emptySpaces)] = "O"
+                        specialCaseForCommander = False
+
+                    elif initialXCoord == oppositeCorner:
+                        self.board[random.choice(otherCorners)] = 'O'
+                        specialCaseForCommander = False
+
+                    else:
+                        self.board['b2'] = 'O'
+                        specialCaseForCommander = False
+                    
+                case 4:
+                    specialCaseForCommander = False
+                    lines = getLines(self.board)
                     almostFinishedOLines = [line for line in lines if \
                                             list(line.values()).count('O') == 2 and \
                                             list(line.values()).count(' ')]
 
-                    if mode == 'regular':
+                    if almostFinishedOLines:
+                        lineFinished = random.choice(almostFinishedOLines)
+                        spaceChosen = [point for point in lineFinished.keys() if self.board[point] == ' '][0]
+                        self.board[spaceChosen] = "O"
+
+                    else:
+                        adjacentXCoord = [i for i in adjacentSpaces if self.board[i] == 'X'][0]
+                        chosenSpace = [i for i in otherCorners if i[0] != adjacentXCoord[0] and \
+                                       i[1] != adjacentXCoord[1]][0]
+                        self.board[chosenSpace] = "O"
+
+            return specialCaseForCommander
+
+        def enemyTurn():
+            try:
+                if mode in ['regular', 'alien pilot', 'drone']:
+                    almostFinishedOLines = [line for line in lines if \
+                                            list(line.values()).count('O') == 2 and \
+                                            list(line.values()).count(' ')]
+
+                    if mode != 'alien pilot':
                         almostFinishedXLines = [line for line in lines if \
                                                 list(line.values()).count('X') == 2 and \
                                                 list(line.values()).count(' ')]
@@ -1169,12 +1303,32 @@ class player:
                         lineFinished = random.choice(almostFinishedOLines)
                         emptySpace = [point for point in lineFinished.keys() if self.board[point] == ' '][0]
 
-                    elif mode == 'regular' and almostFinishedXLines:
+                    elif mode != 'alien pilot' and almostFinishedXLines:
                         lineStopped = random.choice(almostFinishedXLines)
                         emptySpace = [point for point in lineStopped.keys() if self.board[point] == ' '][0]
 
                     else:
-                        emptySpace = random.choice([key for key in list(self.board.keys()) if self.board[key] == ' '])
+                        emptySpace = random.choice([key for key in list(self.board.keys()) if \
+                                                    self.board[key] == ' '])
+
+                        if mode == 'drone':
+                            availableSpaces = [i for i in self.board.keys() if self.board[i] == ' ']
+
+                            for space in availableSpaces:
+                                experimentalBoard = self.board.copy()
+                                experimentalBoard[space] = 'O'
+                                newLines = getLines(experimentalBoard)
+                                newAlmostFinishedOLines = [line for line in newLines if \
+                                                           list(line.values()).count('O') == 2 and \
+                                                           list(line.values()).count(' ')]
+                                newAlmostFinishedXLines = [line for line in newLines if \
+                                                           list(line.values()).count('X') == 2 and \
+                                                           list(line.values()).count(' ')]
+
+                                if len(newAlmostFinishedOLines) > 1 and not newAlmostFinishedXLines:
+                                    emptySpace = space
+                                    break
+
 
                 elif mode == 'alien warrior':
                     emptySpace = random.choice([key for key in list(self.board.keys()) if self.board[key] == ' '])
@@ -1190,23 +1344,38 @@ class player:
         while True:
             drawBoard()
             handlePlayerTurn()
-            lines = getLines()
+            lines = getLines(self.board)
 
             if ['X', 'X', 'X'] in [list(line.values()) for line in lines]:
-                printWithPause(0.5, '\033[97m', 'you won')
-                return 1
+                if mode == 'drone':
+                    printWithPause(2, '\033[97m', 'Before you could place your last X, one of the '
+                                                    'commander\'s snipers shot you.')
+                    play('betterOp28No20Chopin.mp3', self, save=False)
+                    printWithPause(10, "You died. The alien troops will destroy the world.")
 
-            if enemyTurn() == 2:
+                    if input("Will you play again? y/n:") != 'y':
+                        sys.exit()
+
+                    return 0
+
+                else:
+                    printWithPause(0.5, '\033[97m', 'you won')
+                    return 1
+
+            if specialCaseForCommander and mode == 'drone':
+                specialCaseForCommander = handleSpecialCasesForCommander()
+
+            elif enemyTurn() == 2:
                 printWithPause(0.5, '\033[97m', 'you drew')
                 return 2
 
-            lines = getLines()
+            lines = getLines(self.board)
 
             if ['O', 'O', 'O'] in [list(line.values()) for line in lines]:
                 printWithPause(0.5, '\033[97m', 'you lost')
                 return 0
 
-    def playTicTacToeExperiment(self):
+    def experiment(self):
         def getInitializedBoard():
             board = {}
 
@@ -1258,62 +1427,128 @@ class player:
         def emptySpaces():
             return [i for i in self.board.keys() if self.board[i] == ' ']
 
-        def getAlmostFinishedOLines():
+        def getAlmostFinishedOLines(lines):
             return [line for line in lines if list(line.values()).count('O') == 2 and list(line.values()).count(' ')]
 
-        def getAlmstFinishedXLines():
+        def getAlmstFinishedXLines(lines):
             return [line for line in lines if list(line.values()).count('X') == 2 and list(line.values()).count(' ')]
 
         def enemyTurn():
-            paths = []
-            victoriousPaths = []
-            availableSpaces = emptySpaces()
-            emptySpacesQty = len(availableSpaces)
-            boardSpaces = [f'{i}{j}' for i in ['a', 'b', 'c'] for j in range(1, 4)]
+            lines = getLines(self.board)
 
-            for i in availableSpaces:
-                paths.append([['O', i]])
+            if getAlmostFinishedOLines(lines):
+                lineFinished = random.choice(getAlmostFinishedOLines(lines))
+                emptySpace = [point for point in lineFinished.keys() if self.board[point] == ' '][0]
 
-            for g in range(ceiling(emptySpacesQty / 2)):
-                for i in paths:
-                    potentialSpaces = [h for h in boardSpaces if h not in [k[0] for k in i]]
+            elif getAlmstFinishedXLines(lines):
+                lineStopped = random.choice(getAlmstFinishedXLines(lines))
+                emptySpace = [point for point in lineStopped.keys() if self.board[point] == ' '][0]
 
-                    for j in availableSpaces:
-                        i += [['O', j]]
+            else:
+                paths = {}
+                finished = False
 
-                    if g < emptySpacesQty / 2 - 1:
-                        break
+                for i in [i for i in self.board.keys() if self.board[i] == ' ']:
+                    paths[(i, 'O')] = self.board.copy()
+                    paths[(i, 'O')][i] = 'O'
 
-                    for j in emptySpaces():
-                        i += [['X', j]]
+                for j in paths:
+                    newPaths = paths.copy()
 
-                for i in paths:
-                    for j in emptySpaces():
-                        i += [['X', j]]
+                    for i in [i for i in paths[j].keys() if paths[j][i] == ' ']:
+                        newPaths[j + (i, 'X')] = paths[j].copy()
+                        newPaths[j + (i, 'X')][i] = 'X'
 
-            for i in paths:
-                self.experimentalBoard = self.board
+                    paths = newPaths.copy()
 
-                for j in i:
-                    self.experimentalBoard[j[1]] = j[0]
-                    experimentalLines = getLines(self.experimentalBoard)
+                while not finished:
+                    for j in paths:
+                        options = [i for i in paths[j].keys() if paths[j][i] == ' ']
+                        newPaths = paths.copy()
 
-                    if [line for line in experimentalLines if list(line.values()).count('O') == 3]:
-                        victoriousPaths.append(i)
+                        if options:
+                            for i in options:
+                                newPaths[j + (i, 'O')] = paths[j].copy()
+                                newPaths[j + (i, 'O')][i] = 'O'
 
-                    elif [line for line in experimentalLines if list(line.values()).count('X') == 3]:
-                        paths.remove(i)
+                        else:
+                            finished = True
 
-            print(paths)
+                    if not finished:
+                        paths = newPaths.copy()
 
-            print(victoriousPaths)
-            try:
-                emptySpace = random.choice([key for key in list(self.board.keys()) if self.board[key] == ' '])
-                self.board[emptySpace] = 'O'
+                        for j in paths:
+                            options = [i for i in paths[j].keys() if paths[j][i] == ' ']
 
-            except IndexError:
-                printWithPause(0.5, '\033[97m', 'you drew')
-                return 2
+                            if options:
+                                for i in options:
+                                    newPaths[j + (i, 'X')] = paths[j].copy()
+                                    newPaths[j + (i, 'X')][i] = 'X'
+
+                            else:
+                                finished = True
+
+                        paths = newPaths.copy()
+
+                pathsList = list(paths.keys())
+                goodPaths = []
+                badPaths = []
+
+                for path in [path for path in pathsList if path[-1] == 'O']:
+                        hypotheticalLines = getLines(paths[path])
+
+                        if len(getAlmstFinishedXLines(hypotheticalLines)) > 1 and not \
+                                getAlmostFinishedOLines(hypotheticalLines):
+                            badPaths.append(path)
+
+                        elif len(getAlmostFinishedOLines(hypotheticalLines)) > 1:
+                            goodPaths.append(path)
+
+                for path in [path for path in pathsList if path[-1] == 'O']:
+                    extensions1 = [route for route in pathsList if len(route) == len(path) + 4 and \
+                                  route[:len(path)] == path]
+
+                    code = """
+extensions1 = [route for route in pathsList if len(route) == len(path) + 4 and \
+                                  route[:len(path)] == path]
+
+for extension1 in extensions1:
+    extensions2 = [route for route in pathsList if len(route) == len(path) + 4 and \
+                                  route[:len(path)] == path]"""
+
+                    for i in range(8):
+                        code += f"""
+{'  ' * (i + 1)}for extension{i + 2} in extensions{i + 2}:
+    {'  ' * (i + 1)}extensions{i + 3} = [route for route in pathsList if len(route) == len(extension{i + 2}) + 4 and \
+                                  {'  ' * (i + 1)}route[:len(extension{i + 2})] == extension{i + 2}]"""
+
+                    for i in range(9):
+                        pass
+
+                for badPath in badPaths:
+                    for path in [path for path in pathsList if len(path) > len(badPath) and \
+                                                               path[:len(badPath)] == badPath]:
+                        badPaths.append(path)
+
+                for path in pathsList:
+                    if path in goodPaths or path in badPaths:
+                        pathsList.remove(path)
+
+
+                if goodPaths:
+                    emptySpace = random.choice(goodPaths)[0]
+
+                elif pathsList:
+                    emptySpace = random.choice(pathsList)[0]
+
+                else:
+                    printWithPause(3, '\033[95mRealising that you might otherwise beat the commander, '
+                                      'he signaled one of his snipers to kill you while you were distracted by the '
+                                      'game.')
+                    printWithPause(3, '\033[91mThe sniper killed you.')
+                    printWithPause(3, 'You died.')
+
+            self.board[emptySpace] = 'O'
 
         while True:
             drawBoard()
@@ -1324,12 +1559,22 @@ class player:
                 printWithPause(0.5, '\033[97m', 'you won')
                 return 1
 
+            elif not list(self.board.values()).count(' '):
+                print(self.board, 'proTurn')
+                printWithPause(0.5, 'You drew.')
+                return 2
+
             enemyTurn()
             lines = getLines(self.board)
 
             if ['O', 'O', 'O'] in [list(line.values()) for line in lines]:
                 printWithPause(0.5, '\033[97m', 'you lost')
                 return 0
+
+            elif not list(self.board.values()).count(' '):
+                print(self.board, 'foeTurn')
+                printWithPause(0.5, 'You drew.')
+                return 2
 
     def playTicTacToeAgainstTheSunPriest(self):
         self.board = {}
@@ -1677,6 +1922,12 @@ class player:
                 return 1
 
     def playGoblinGame(self, mode):
+        if mode == 'unknown character':
+            printWithPause(2, "\033[91mThe unknown character removes their mask. "
+                              "You see that they are actually...")
+            play("newCommanderTheme.mp3", self, save=False)
+            printWithPause(2, "The alien commander!")
+
         print('\033[97m')
         doors = {}
         self.warriorFound = 0
@@ -1840,6 +2091,57 @@ class player:
 
             drawBoard()
 
+    def playWhereIsWaldo(self, mode):
+        self.board = {}
+        colors = [f'\033[3{i}m' for i in range(1, 8)] + [f'\033[9{i}m' for i in range(1, 7)]
+        characters = [i for i in ('`1234567890-=qwertyuop[]asdfghjkl;zxcvbnm,./~!@#$%^&*()_+QWERTYUIOP{}'
+                                  '|ASDFGHJKL:"ZXCVBNM<>?`™£¢∞§¶•ªº–≠œ∑´®†¥¨ˆøπ“‘«åß∂ƒ©˙∆˚¬…æΩ≈ç√∫˜µ≤≥µ')]
+        horizontalCharsStr = 'abcdefghijklnmopqrstvuwyxz'
+        horizontalCharsDict = dict(zip(list('abcdefghijklnmopqrstvuwyxz'), list(range(26))))
+
+        for i in range(26):
+            for j in range(10):
+                self.board[(i, j)] = f'{random.choice(colors)}{random.choice(characters)}'
+
+        self.board[random.choice(list(self.board.keys()))] = '\033[91mi'
+
+        def showBoard():
+            print(f'\033[97m {horizontalCharsStr}')
+            charsAvailable = characters.copy()
+
+            for i in range(10):
+                message = ''
+
+                for j in range(26):
+                    message += self.board[(j, i)]
+
+                print(f'\033[97m{i}{message}')
+
+        def enterCoord():
+            guessHor = input('Enter the first coordinate of the red character "i".')
+            guessVer = input('Enter the second coordinate of the red character "i".')
+
+            try:
+                if self.board[(horizontalCharsDict[guessHor], int(guessVer))] == '\033[91mi':
+                    printWithPause(1, '\033[97mYou are correct.')
+                    return 1
+
+                printWithPause(1, '\033[97mYou are wrong.')
+                return 0
+
+            except Exception as E:
+                    printWithPause(1, '\033[97mYour input was invalid.')
+                    print(E)
+                    return 0
+
+        showBoard()
+
+        while True:
+            if enterCoord():
+                return 1
+
+            showBoard()
+
     def tryToOpenBox(self):
         if self.lockedBoxPuzzles and self.lockedBoxPuzzles[0]('regular') == 1:
             self.lockedBoxPuzzles.pop(0)
@@ -1856,10 +2158,12 @@ class player:
 
         while not proceed:
             action = getInput('\033[96m', "Type 'e' to exit, 't' to play tic tac toe, 'g' to play the "
-                                          "goblin game, or 'm' to play the movement puzzle.")
+                                          "goblin game, 'm' to play the movement puzzle, or "
+                                          "'w' to play where's Waldstein:")
 
             if action == 'e':
                 if self.handleTitleScreen(file):
+                    play('The War.mp3', self, save=False)
                     return 1
 
             elif action == 't':
@@ -1868,9 +2172,9 @@ class player:
 
                 while action not in list(modesPerAction.keys()):
                     modesPerAction = {'1': 'drone', '2': 'alien pilot', '3': 'alien warrior', '4': 'sun priest'}
-                    action = getInput("Who will you face in tic tac toe? Type 'e' to exit,'1' to face a drone, '2' to "
-                                      "face the alien pilot, '3' to face the alien warrior, or '4' to face the sun "
-                                      "priest.")
+                    action = getInput("\033[96mWho will you face in tic tac toe? Type 'e' to exit,'1' to face a drone, "
+                                      "'2' to face the alien pilot, '3' to face the alien warrior, or '4' to face the "
+                                      "sun priest.")
 
                     if action == 'e':
                         self.handlePuzzleMenu(file)
@@ -1884,9 +2188,9 @@ class player:
                 while action not in list(modesPerAction.keys()):
                     modesPerAction = {'1': 'unknown character', '2': 'alien pilot', '3': 'alien warrior',
                                       '4': 'sun priest'}
-                    action = getInput("Who will you face in tic tac toe? Type 'e' to exit,'1' to face an unknown "
-                                      "character, '2' to face the alien pilot, '3' to face the alien warrior, or "
-                                      "'4' to face the sun priest.")
+                    action = getInput("\033[96mWho will you face in the goblin game? Type 'e' to exit,'1' to face an "
+                                      "unknown character, '2' to face the alien pilot, '3' to face the alien warrior, "
+                                      "or '4' to face the sun priest.")
 
                     if action == 'e':
                         self.handlePuzzleMenu(file)
@@ -1900,14 +2204,19 @@ class player:
                 while action not in list(modesPerAction.keys()):
                     modesPerAction = {'1': 'mysterious figure', '2': 'alien pilot', '3': 'alien warrior',
                                       '4': 'sun priest'}
-                    action = getInput("Who will you face in tic tac toe? Type 'e' to exit,'1' to face a mysterious "
-                                      "figure, '2' to face the alien pilot, '3' to face the alien warrior, or "
-                                      "'4' to face the sun priest.")
+                    action = getInput("\033[96mWho will you face in the movement game? Type 'e' to exit,'1' to face a "
+                                      "mysterious figure, '2' to face the alien pilot, '3' to face the alien warrior, "
+                                      "or '4' to face the sun priest.")
 
                     if action == 'e':
                         self.handlePuzzleMenu(file)
 
                 self.playMovementPuzzle(modesPerAction[action])
+
+            elif action == 'w':
+                self.playWhereIsWaldo('')
+
+        play('The War.mp3', self, save=False)
 
     def handleTitleScreen(self, file):
         action = None
@@ -1943,3 +2252,10 @@ class player:
             elif action == 'p':
                 if self.handlePuzzleMenu(file):
                     return 1
+
+    def getUpdate(self):
+        example = player()
+
+        for i in list(vars(example).keys()):
+            if not hasattr(self, i):
+                exec(f'self.{i} = example.{i}')

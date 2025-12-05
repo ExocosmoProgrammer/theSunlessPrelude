@@ -1,0 +1,25 @@
+from definitions import greater
+
+
+class movementPuzzleFireball:
+    def __init__(self, coordinate, hr, vr, harmful=1, sprite='  *  ', linger=float('inf')):
+        self.coordinate = coordinate
+        self.hr = hr
+        self.vr = vr
+        self.tilesSkipped = []
+        self.hurts = harmful
+        self.sprite = sprite
+        self.linger = linger
+
+    def move(self, board):
+        self.tilesSkipped = []
+        self.linger -= 1
+
+        for i in range(int(greater(abs(self.hr), abs(self.vr)))):
+            self.coordinate[0] += self.hr
+            self.coordinate[1] += self.vr
+
+            if tuple(self.coordinate) not in board.keys() or board[tuple(self.coordinate)] == ' ||| ':
+                return 1
+
+            self.tilesSkipped.append(board[tuple(self.coordinate)])

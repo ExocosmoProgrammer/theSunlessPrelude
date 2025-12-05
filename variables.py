@@ -1,3 +1,5 @@
+import pygame.display
+
 foesPerLevel = {1: ['alien colonist', 'alien bodyguard', 'alien police', 'alien soldier',
                     'alien secret service'],
                 2: ['alien assassin', 'alien minion', 'alien general', 'alien scientist',
@@ -230,3 +232,9 @@ for foeType in movementPuzzleFoeSprites.keys():
             movementPuzzleFoeSprites[foeType][i] = sprite
 
 keysPerDirection = {(0, -1): 'w', (-1, 0): 'a', (0, 1): 's', (1, 0): 'd'}
+
+# Set up a display.
+display = pygame.display.set_mode((1440, 900))
+pygame.display.toggle_fullscreen()
+WIDTH = display.get_width()
+HEIGHT = display.get_height()

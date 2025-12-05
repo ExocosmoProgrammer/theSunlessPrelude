@@ -5,17 +5,20 @@ from definitions import (getTarget, printWithPause, getReducedDamage, lesser, gr
 
 
 class drone:
-    def __init__(self):
+    def __init__(self, empowered=False):
         self.inventory = []
         self.attack = 5
         self.hp = 100
         self.foe = 0
-        self.damageReduction = 0
         self.isDrone = 1
         self.poisonDamage = 0
         self.turnsOfPoisonDamage = 0
         self.turnsOfBurningDamage = 0
         self.burningDamage = 0
+        self.empowered = empowered
+        self.damageReduction = 37.5 if self.empowered else 0
+        self.protecting = False
+        self.damageMultiplier = 1
 
     def basicAttack(self, enemies, protagonist):
         """Gets input on the id number of whom to attack and attacks the enemy with the entered id number if possible,
@@ -53,13 +56,13 @@ class drone:
                                                     f'immune.')
 
                 else:
-                    damageInflicted = getReducedDamage(protagonist.attack / 2, enemy)
+                    damageInflicted = getReducedDamage(self.attack, enemy)
                     printWithPause(0.5, '\033[93m', f'Your drone hit {enemy.getPrintName()}, inflicting '
                                                     f'{damageInflicted} '
                                                     f'damage.')
 
                     if enemy.twirlingNunchucks:
-                        self.hp -= protagonist.attack / 2
+                        self.hp -= self.attack
                         printWithPause(0.5, '\033[91m', f'{enemy.getPrintName()} deflected your drone\'s'
                                                         f' attack with their nunchucks, inflicting {damageInflicted} '
                                                         f'damage to your drone.')
@@ -77,15 +80,18 @@ class drone:
 
     def scan(self, enemies, protagonist):
         """Shows what enemies are in the player's room and makes future mentions of said enemies show their names"""
+
+        enemies = [enemy for enemy in enemies if enemy.hp > 0]
         print('')
         printWithPause(0.5, '\033[96m', 'The enemies in your room are:')
         # If you have a radio, then your drone's scans will always show the full names of all enemies that are in
         # your room.
 
-        if 'radio' in protagonist.inventory:
+        if 'radio' in protagonist.inventory or self.empowered:
             for enemy in enemies:
                 enemy.scanned = 1
-                printWithPause(0.5, '\033[96m', f'   {enemy.fullName}')
+                printWithPause(0.5, '\033[96m', f'   {enemy.fullName}' + f' with {enemy.hp} hp' \
+                    if self.empowered else '')
 
         # If you don't have a radio, then your drone's scans will show the full names of enemies that have been
         # scanned and '???' for enemies that have not been scanned.
@@ -100,7 +106,8 @@ class drone:
     def updateStats(self, protagonist):
         """Updates some stats of the drone"""
         self.hp = greater(self.hp, 0)
-        self.attack = protagonist.attack / 2
+        self.attack = (protagonist.attack * 1 if self.empowered else 1 / 2) * self.damageMultiplier
+        self.protecting = False
 
     def giveItemToPro(self, protagnoist):
         """Gets input on what item to give to the player and tries to add said item to the player's inventory and
@@ -142,6 +149,9 @@ class drone:
             if self.inventory:
                 actionList.append("'t' to get an item from your drone")
 
+            if self.empowered:
+                actionList.append("'b' to make your drone protect you")
+
         action = getInput('\033[96m', getListOfThingsWithCommas('or', actionList, ending=':'))
 
         if action == 'h':
@@ -156,6 +166,9 @@ class drone:
 
             elif action == 's':
                 self.scan(enemies, protagonist)
+
+            elif action == 'b':
+                self.protecting = True
 
     def heal(self, protagonist):
         """Uses one of the player's potions to heal the drone if the player has potions. The drone will heal by 50 hp

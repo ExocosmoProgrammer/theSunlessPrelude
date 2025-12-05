@@ -17,7 +17,7 @@ class movementPuzzleFoe:
             self.speed = 1
 
         if kind == 'mysterious figure':
-            self.drones = [movementPuzzleFoe(coord, 'drone', board) for coord in [[0, 0], [8, 0], [4, 2]]]
+            self.drones = [movementPuzzleFoe(coord, 'drone', board) for coord in [[2, 1], [6, 1]]]
 
         self.type = kind
         self.coordinate = coordinate
@@ -234,7 +234,7 @@ class movementPuzzleFoe:
                                          enemy.coordinate[1] + sign(playerSpace[1] - enemy.coordinate[1])]
                     enemy.destinationProcedure = 1
 
-                elif distanceToPro > 3:
+                elif distanceToPro > 3 and False:
                     potentialEscapes = [escape for escape in escapes if abs(escape[1] - enemy.coordinate[1]) == 1 and \
                                         sign(escape[1] - enemy.coordinate[1]) == \
                                         sign(playerSpace[1] - enemy.coordinate[1])]
@@ -289,6 +289,17 @@ class movementPuzzleFoe:
 
                         else:
                             enemy.destination = nearestPlayerEscapes[1]
+
+                        try:
+                            escapes.remove(enemy.destination)
+
+                        except ValueError:
+                            pass
+
+                elif distanceToPro == 1:
+                    enemy.destination = [enemy.coordinate[0] + sign(playerSpace[0] - enemy.coordinate[0]),
+                                         enemy.coordinate[1]]
+                    enemy.destinationProcedure = 7
 
                 else:
                     enemy.destination = [enemy.coordinate[0] + sign(playerSpace[0] - enemy.coordinate[0]),

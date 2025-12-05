@@ -207,6 +207,7 @@ class foe:
                     else:
                         printWithPause(0.5, '\033[91m', f'You were hit by {self.getPrintName()}, '
                                                         f'inflicting 5 damage.')
+                        player.adrenalineCooldown -= 1
 
                         if self.poisonAttack:
                             target.poisonDamage = greater(self.poisonAttack, target.poisonDamage)
@@ -257,6 +258,7 @@ class foe:
                             printWithPause(0.5, '\033[91m', f'{self.getPrintName()} shot you with '
                                                             f'their gun, inflicting {damageTaken} damage. '
                                                             f'You failed to block the shot.')
+                            player.adrenalineCooldown -= 1
 
                         elif self.nunchuckDebuff:
                             if target.isDrone:
@@ -267,7 +269,8 @@ class foe:
                                 damageTaken *= 2
                                 printWithPause(0.5, '\033[91m', f'{self.getPrintName()} shot you '
                                                                 f'with their gun, inflicting {damageTaken} damage. '
-                                                                f'You failed to hit the shot with your nunchucks.')
+                                                                f'You failed to reflect the shot with your nunchucks.')
+                                player.adrenalineCooldown -= 1
 
                         elif target.isDrone:
                             printWithPause(0.5, '\033[91m', f'{self.getPrintName()} attacked your '
@@ -276,15 +279,18 @@ class foe:
                         else:
                             printWithPause(0.5, '\033[91m', f'{self.getPrintName()} attacked you, '
                                                             f'inflicting {damageTaken} damage.')
+                            player.adrenalineCooldown -= 1
 
                     elif not target.isDrone and target.blocking:
                         printWithPause(0.5, '\033[91m', f'{self.getPrintName()} attacked you, inflicting '
                                                         f'{damageTaken} damage, causing them to bleed.')
                         self.bleedingDamage = greater(self.bleedingDamage, 3)
+                        player.adrenalineCooldown -= 1
 
                     elif not target.isDrone:
                         printWithPause(0.5, '\033[91m', f'{self.getPrintName()} attacked you, inflicting '
                                                         f'{damageTaken} damage.')
+                        player.adrenalineCooldown -= 1
 
                         if self.nunchuckDebuff:
                             self.hp -= damageTaken * 4
@@ -978,10 +984,10 @@ class foe:
     def getUpdate(self):
         pass
 
-    def beHitByBaton(self):
+    def beHitByBaton(self, player):
         self.hitsUntilStunnedByBaton -= 1
 
         if self.hitsUntilStunnedByBaton <= 0:
-            self.stun += 2
+            self.stun += 2 if player.damageMultiplierForAttackType >= 1 else 1
             self.hitsUntilStunnedByBaton = 5
             printWithPause(0.5, '\033[96m', f'{self.getPrintName()} was stunned by your baton.')

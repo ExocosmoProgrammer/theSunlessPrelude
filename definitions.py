@@ -34,6 +34,7 @@ def getInput(*args):
     for arg in args:
         text += arg + '\033[40m'
 
+    text += '\033[97m'
     return input(text)
 
 
@@ -97,6 +98,7 @@ def getTarget(enemies, response):
 
 def getListOfThingsWithCommas(conjunction, messages, ending='', beginning=''):
     """Adds commas, a conjunction, a beginning, and an end to a list of phrases as appropriate."""
+    messages = messages.copy()
 
     if len(messages) > 2:
         for i in range(len(messages) - 1):
@@ -142,13 +144,20 @@ def loadWithPickle(file):
         return pickle.load(data)
 
 
-def play(song):
+def play(song, player=None, save=True, canRestart=False):
     """Plays a song with the file name that is the argument."""
-    pygame.mixer.init()
-    pygame.mixer.music.load(f'music/{song}')
-    pygame.mixer.music.set_volume(1)
-    pygame.mixer.music.play(-1)
 
+    if player is None or canRestart or player.lastSongPlayed != song:
+        pygame.mixer.init()
+        pygame.mixer.music.load(f'music/{song}')
+        pygame.mixer.music.set_volume(1)
+        pygame.mixer.music.play(-1)
+
+        if player is not None:
+            player.lastSongPlayed = song
+
+        if save:
+            player.song = song
 
 def getRandomItemsFromList(list, qty):
     """Returns qty random items from list without replacement."""
@@ -185,3 +194,9 @@ def sign(a):
 
 def ceiling(a):
     return a if int(a) == a else a % 1 + 1
+
+
+def strIndex(string, char):
+    for i in range(len(string)):
+        if string[i] == char:
+            return i
